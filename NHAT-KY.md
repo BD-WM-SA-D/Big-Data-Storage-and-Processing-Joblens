@@ -4,6 +4,15 @@ Quy ước ghi: [repo-routing – Nhật ký thay đổi](https://github.com/BD-
 
 ## 2026-10-02 · Hoang Le · chưa có PR
 
+- **Tạo:** –
+- **Sửa:** `.env.example` (C – thêm biến đăng nhập S3/Trino, `JOBLENS_SEARCH_URL`, ADR 0001 D7); `AGENTS.md` (C – phạm vi repo theo ADR 0001); `.gitignore`, `.pre-commit-config.yaml` (C – chỉ đổi dòng chú thích đầu file)
+- **Xóa:** –
+- **Lý do:** đồng bộ file cấu hình chung sau khi repo `joblens` thêm hợp đồng dữ liệu và ADR 0001
+- **Ảnh hưởng repo khác:** đồng bộ cùng lúc ở cả 4 repo – xem `joblens/NHAT-KY.md`
+- **AI:** Claude Code (Claude Opus 5.5) – soạn schema, contract, script, sửa docs theo phương án đề xuất của ADR 0001; <người kiểm tra> đã kiểm tra
+
+## 2026-10-02 · Hoang Le · chưa có PR
+
 - **Tạo:** `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/joblens.mdc` (C – đồng bộ từ joblens, có dòng `ĐỒNG BỘ TỪ`)
 - **Sửa:** –
 - **Xóa:** –

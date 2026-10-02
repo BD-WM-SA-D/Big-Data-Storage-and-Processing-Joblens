@@ -110,7 +110,9 @@ Câu hỏi môn chấm: dữ liệu được *di chuyển, lưu trữ, xử lý*
 - Thứ gì sửa trực tiếp trên cluster (`kubectl edit`, giao diện web) phải được đưa ngược vào manifest.
 - Mỗi lần chạy demo hay chốt số liệu thì thêm một dòng vào `deploy/compat.md`.
 - `benchmarks/` chỉ giữ bảng số liệu cuối, không giữ log hay output sinh tự động. Không bịa số đo.
-- Repo này ghi các topic `events.user.*`, bảng `bronze.*`, `silver.job_postings*` và gold. Không ghi `silver.job_skills` hay `silver.review_aspects` (những bảng đó do job của repo mining ghi).
+- Repo này ghi các topic `events.user.v1`, `alerts.job_match.v1`, bảng `bronze.*`, `silver.job_postings*` và gold. Không ghi `silver.job_skills`, `silver.job_dedup`, `silver.review_aspects`, `silver.reco_scores` (do image của repo mining ghi).
+- Chuẩn hóa lương, địa điểm, kinh nghiệm, cấp bậc từ trường có sẵn là việc của repo này (ADR 0001 D2). Không viết parser HTML (ADR 0001 D1) và không tự tính dedup (D5).
+- Triển khai image dịch vụ tìm kiếm của repo mining và chạy job streaming ghép cảnh báo (`app.alert_subscriptions.v1` × tin mới → `alerts.job_match.v1`) – ADR 0001 D4.
 - Phải chạy được một mình: nạp raw mẫu từ fixtures của `joblens` thay cho crawler, image mô hình có thể thay bằng stub.
 
 **Lệnh kiểm tra:** `pre-commit run --all-files`. Khi đã có code thì thêm `pytest -q`, `dbt build` (với profile local) và smoke test trong `scripts/`.

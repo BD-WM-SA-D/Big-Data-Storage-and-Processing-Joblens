@@ -1,6 +1,7 @@
 # ĐỒNG BỘ TỪ joblens/docs/project-plan/templates/pre-commit-config.yaml – sửa ở đó trước, không sửa tại đây
 # Mẫu .pre-commit-config.yaml cho 4 repo JobLens.
-# Đổi tên thành .pre-commit-config.yaml, rồi chạy:
+# Bản gốc của .pre-commit-config.yaml ở cả 4 repo – đồng bộ bằng scripts/sync_templates.py.
+# Sau khi clone, chạy:
 #   pip install pre-commit && pre-commit install && pre-commit autoupdate
 # (autoupdate để lấy bản mới nhất của từng hook).
 repos:
