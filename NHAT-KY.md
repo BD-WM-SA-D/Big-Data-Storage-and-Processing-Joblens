@@ -2,6 +2,15 @@
 
 Quy ước ghi: [repo-routing – Nhật ký thay đổi](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md#nhật-ký-thay-đổi). Mỗi PR một mục, mục mới nhất đặt trên cùng. Liệt kê mọi file tạo/xóa và mọi file mục A/C/E bị sửa.
 
+## 2026-10-02 · Hoang Le · chưa có PR
+
+- **Tạo:** `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/joblens.mdc` (C – đồng bộ từ joblens, có dòng `ĐỒNG BỘ TỪ`)
+- **Sửa:** –
+- **Xóa:** –
+- **Lý do:** quy tắc làm việc cho AI agent (Codex, Claude Code, Cursor): tra repo-routing trước khi tạo file, ghi nhật ký, những việc không được làm, phạm vi riêng của repo này
+- **Ảnh hưởng repo khác:** đồng bộ cùng lúc ở cả 4 repo – xem `joblens/NHAT-KY.md`
+- **AI:** Claude Code (Claude Opus 5.5) – soạn quy tắc và script đồng bộ; <người kiểm tra> đã kiểm tra
+
 ## 2026-10-02 · Hoang Le · không qua PR (giai đoạn khởi tạo)
 
 - **Tạo:** `NHAT-KY.md` (D)
