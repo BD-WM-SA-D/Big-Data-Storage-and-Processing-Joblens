@@ -1,0 +1,45 @@
+# Mẫu .pre-commit-config.yaml cho 4 repo JobLens.
+# Đổi tên thành .pre-commit-config.yaml, rồi chạy:
+#   pip install pre-commit && pre-commit install && pre-commit autoupdate
+# (autoupdate để lấy bản mới nhất của từng hook).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files     # chặn file > 1 MB
+        args: ["--maxkb=1024"]
+      - id: detect-private-key          # chặn private key
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks                    # chặn token, mật khẩu, access key
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout                  # xóa output notebook (thường chứa dữ liệu mẫu)
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: forbid-env-files
+        name: Không commit file .env (trừ .env.example)
+        entry: "File .env chứa bí mật – dùng .env.example"
+        language: fail
+        files: '(^|/)\.env(\.(?!example$)[^/]*)?$'
+      - id: forbid-data-and-models
+        name: Không commit dữ liệu/model ngoài fixtures/
+        entry: "Dữ liệu/model phải để trong s3://joblens/... (xem quy tắc 8)"
+        language: fail
+        files: '\.(parquet|avro|orc|jsonl|pt|pth|bin|safetensors|onnx|ckpt|h5|pkl|joblib)$'
+        exclude: '^fixtures/'

@@ -1,0 +1,117 @@
+# ============================================================
+# .gitignore chung cho 4 repo JobLens
+# Đổi tên file này thành .gitignore khi tạo template repository.
+# Xem lý do từng nhóm: docs/09-quy-tac-lam-viec-chung.md, quy tắc 8.
+# ============================================================
+
+# --- 1. Bí mật & cấu hình cục bộ ---------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+kubeconfig*
+*.kubeconfig
+values-secret*.yaml
+/secrets/
+*credentials*.json
+*service-account*.json
+airflow_connections*.json
+
+# --- 1b. Cấu hình riêng từng máy (commit bản *.example) -----------
+*.local.yaml
+*.local.yml
+*-local.yaml
+values-local*.yaml
+docker-compose.override.yml
+.dbt/
+# bản mẫu luôn được commit (dòng phủ định phải đứng sau)
+!*.example.yaml
+!*.example.yml
+
+# --- 2. Dữ liệu (để trong s3://joblens/...) -----------------------
+# Thư mục có dấu / ở đầu chỉ áp dụng ở gốc repo, để không chặn nhầm
+# module code như app/api/models/ hay mining/ie/data/.
+/data/
+/raw/
+/downloads/
+/exports/
+*.parquet
+*.avro
+*.orc
+*.jsonl
+*.jsonl.gz
+*.csv.gz
+*.html.gz
+warehouse/
+# Great Expectations: Data Docs và kết quả validation sinh tự động
+gx/uncommitted/
+great_expectations/uncommitted/
+spark-warehouse/
+metastore_db/
+derby.log
+checkpoints/
+.scrapy/
+httpcache/
+/labels/
+annotations/export*/
+# Ngoại lệ: chỉ dữ liệu mẫu có giấy phép rõ ràng
+!fixtures/
+!fixtures/**
+
+# --- 3. Model & file nhị phân lớn (để trong s3://joblens/models) --
+/models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.ckpt
+*.h5
+*.pkl
+*.joblib
+mlruns/
+.cache/huggingface/
+wandb/
+
+# --- 4. Môi trường, build, cache -----------------------------------
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+node_modules/
+# dbt
+target/
+dbt_packages/
+logs/
+# Airflow chạy local
+airflow.db
+airflow-webserver.pid
+
+# --- 5. Tài liệu có bản quyền --------------------------------------
+# Slide bài giảng, sách, tài liệu của giảng viên: không đưa lên GitHub
+/slides/
+/lectures/
+*.pptx
+
+# --- 6. IDE & hệ điều hành -----------------------------------------
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*
