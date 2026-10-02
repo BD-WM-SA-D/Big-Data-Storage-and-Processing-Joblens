@@ -1,3 +1,4 @@
+<!-- ĐỒNG BỘ TỪ joblens/docs/project-plan/templates/CONTRIBUTING.md – sửa ở đó trước, không sửa tại đây -->
 # Đóng góp vào JobLens
 
 Bản rút gọn của [Quy tắc làm việc chung](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/project-plan/09-quy-tac-lam-viec-chung.md) – áp dụng như nhau ở cả 4 repo.
@@ -6,14 +7,16 @@ Bản rút gọn của [Quy tắc làm việc chung](https://github.com/BD-WM-SA
 
 1. Nhận hoặc tạo issue trên board chung của org; mỗi issue một người phụ trách.
 2. Tạo nhánh `feat/<mô-tả-ngắn>`, `fix/…` hoặc `docs/…` từ `main`.
-3. Commit theo Conventional Commits: `feat(crawler): …`, `fix(dbt): …`, `docs(uml): …`.
-4. Mở PR và **tự review**: đọc lại toàn bộ diff theo checklist bên dưới.
-5. Squash merge khi CI pass. Không push thẳng `main`.
-6. Ngoại lệ: nếu PR có thể làm hỏng repo khác (contracts, đổi tên cột/bảng/topic), báo trong nhóm chat kèm link và chờ 24 giờ; thay đổi *major* chờ người phụ trách repo bị ảnh hưởng xác nhận.
+3. Trước khi tạo file mới, tra [file nào lên repo nào](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md) để chắc file thuộc repo này. File có bản gốc ở nơi khác (dòng đầu ghi `ĐỒNG BỘ TỪ` hoặc `SINH TỪ`) thì không sửa tại chỗ.
+4. Commit theo Conventional Commits: `feat(crawler): …`, `fix(dbt): …`, `docs(uml): …`.
+5. Ghi một mục vào `NHAT-KY.md` của repo (và của `joblens` nếu chạm repo khác) – [mẫu](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md#nhật-ký-thay-đổi).
+6. Mở PR và **tự review**: đọc lại toàn bộ diff theo checklist bên dưới.
+7. Squash merge khi CI pass. Không push thẳng `main`.
+8. Ngoại lệ: nếu PR có thể làm hỏng repo khác (contracts, đổi tên cột/bảng/topic), báo trong nhóm chat kèm link và chờ 24 giờ; thay đổi *major* chờ người phụ trách repo bị ảnh hưởng xác nhận.
 
 ## Khi đụng tới schema
 
-Mở PR ở `joblens-contracts` trước (SemVer: thêm trường không bắt buộc → minor; đổi tên/xóa → major kèm topic/bảng `.vN` mới). Chỉ sửa code ở repo này sau khi contracts đã được merge và gắn tag.
+Mở PR ở repo chung `joblens` (contracts) trước (SemVer: thêm trường không bắt buộc → minor; đổi tên/xóa → major kèm topic/bảng `.vN` mới). Chỉ sửa code ở repo này sau khi contracts đã được merge và gắn tag.
 
 ## Không được commit
 
@@ -35,6 +38,8 @@ Sau khi clone, chạy `pre-commit install` để các lệnh chặn tự động
 
 - [ ] Đã tự đọc lại toàn bộ diff trên GitHub.
 - [ ] PR nhỏ, một mục đích.
+- [ ] File mới nằm đúng repo theo repo-routing; đã thêm dòng đánh dấu nếu là file mục C/E.
+- [ ] Đã ghi `NHAT-KY.md` (repo này, và `joblens` nếu ảnh hưởng repo khác).
 - [ ] Test/lint pass; không có dữ liệu hay bí mật trong diff.
 - [ ] Cập nhật tài liệu/ADR nếu thay đổi hành vi hoặc kiến trúc.
 - [ ] Ghi chú nếu có dùng AI (công cụ, phần nào, ai đã kiểm tra).
