@@ -3,10 +3,10 @@ description: Quy tắc JobLens – file nào lên repo nào, nhật ký, những
 alwaysApply: true
 ---
 <!-- ĐỒNG BỘ TỪ joblens/docs/project-plan/templates/cursor-rule.mdc – sửa ở đó trước, không sửa tại đây -->
-Đọc và tuân thủ toàn bộ @AGENTS.md ở gốc repo trước khi tạo hoặc sửa file. Tóm tắt các điểm bắt buộc:
+Đọc và tuân thủ toàn bộ @AGENTS.md ở gốc repo trước khi tạo hoặc sửa file. Tóm tắt:
 
-- Tra `joblens/docs/repo-routing.md` để biết file thuộc repo nào. File không thuộc repo này thì không tạo.
+- Tra bảng "Tra nhanh" trong `joblens/docs/repo-routing.md` để biết file thuộc repo nào. File không thuộc repo này thì không tạo.
 - File có dòng đầu `ĐỒNG BỘ TỪ` hoặc `SINH TỪ` thì không sửa tại chỗ, mà sửa bản gốc trong repo `joblens`.
-- Mỗi thay đổi ghi một mục vào `NHAT-KY.md` (mục mới trên cùng). Dòng AI ghi công cụ và để `<người kiểm tra>`.
-- Không commit bí mật, dữ liệu crawl, model, PII. Không dùng `--no-verify`, không push thẳng `main`, không force-push.
-- Schema sửa ở `joblens` trước. Không bịa tên, MSSV, ngày hay số liệu: giữ dạng `<...>`.
+- Hợp đồng (schema, contract bảng, API) chỉ sửa ở `joblens`. Đổi tên hoặc xóa trường thì phải hỏi nhóm đang dùng trước.
+- Không commit bí mật, dữ liệu crawl, model, PII. Không dùng `--no-verify`, không force-push, không push khi chưa được yêu cầu.
+- Dùng AI thì ghi dòng `AI: <công cụ> – <phần nào>` cuối commit message. Không bịa tên, MSSV, ngày hay số liệu: giữ dạng `<...>`.

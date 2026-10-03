@@ -1,6 +1,6 @@
 # Nhật ký thay đổi – Big-Data-Storage-and-Processing-joblens
 
-Quy ước ghi: [repo-routing – Nhật ký thay đổi](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md#nhật-ký-thay-đổi). Mỗi PR một mục, mục mới nhất đặt trên cùng. Liệt kê mọi file tạo/xóa và mọi file mục A/C/E bị sửa.
+Chỉ ghi sự kiện đáng nhớ: đổi hợp đồng hoặc file cấu hình chung, ghép hệ thống, chốt số liệu, quyết định quan trọng. Việc thường ngày đã có lịch sử git. Mục mới đặt trên cùng, vài dòng là đủ – xem [repo-routing](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md), mục Nhật ký.
 
 ## 2026-10-02 · Hoang Le · chưa có PR
 

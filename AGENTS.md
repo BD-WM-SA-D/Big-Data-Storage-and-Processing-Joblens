@@ -28,13 +28,14 @@ Tài liệu gốc:
 
 ## Mỗi khi tạo hoặc sửa file (bắt buộc)
 
-1. **Xác định repo đích** bằng `repo-routing.md`, mục A–F, và mục "Phạm vi repo này" ở cuối file này. Nếu file không thuộc repo đang mở thì **không tạo**: báo người dùng repo đúng và phần việc cần làm ở đó. Nếu bảng không có loại file này thì hỏi người dùng.
+1. **Xác định repo đích** bằng bảng "Tra nhanh" ở đầu `joblens/docs/repo-routing.md` (chi tiết ở mục A–F) và mục "Phạm vi repo này" ở cuối file này. Nếu file không thuộc repo đang mở thì **không tạo**: báo người dùng repo đúng và phần việc cần làm ở đó. Nếu bảng không có loại file này thì hỏi người dùng.
 2. **Tôn trọng dòng đánh dấu.** File có dòng đầu `ĐỒNG BỘ TỪ …` hoặc `SINH TỪ …` thì **không sửa tại chỗ**. Chỉ ra bản gốc cần sửa (thường ở `joblens/docs/project-plan/templates/` hoặc `joblens/schemas/`).
 3. **Thêm dòng đánh dấu** khi tạo file mục C (`ĐỒNG BỘ TỪ`), mục E (`LIÊN QUAN: <repo>/<file>`) hoặc file sinh từ schema (`SINH TỪ … @ vX.Y.Z`).
-4. **Ghi `NHAT-KY.md`** của repo này trong cùng thay đổi. Mục mới đặt **trên cùng** và theo mẫu trong `repo-routing.md#nhật-ký-thay-đổi`.
-   - Liệt kê mọi file tạo, sửa (mục A/C/E) và xóa.
-   - Dòng **AI** ghi tên công cụ và model, phần nào do AI làm, kèm `<người kiểm tra>`. **Không tự điền tên người kiểm tra.**
-   - Nếu thay đổi chạm schema, file cấu hình chung hoặc repo khác thì nhắc người dùng ghi thêm vào `joblens/NHAT-KY.md`.
+4. **Đánh dấu việc dùng AI.** Khi commit, thêm dòng `AI: <công cụ> – <phần nào>` cuối commit message.
+   - Việc thường ngày không cần ghi `NHAT-KY.md`.
+   - Chỉ ghi nhật ký (vài dòng, mục mới trên cùng) khi đổi hợp đồng hoặc file cấu hình chung, khi ghép hệ thống hay chốt số liệu.
+   - Nếu thay đổi chạm hợp đồng ở `joblens`, nhắc người dùng **nhắn nhóm chat**.
+   - **Không tự điền tên người kiểm tra**, để `<người kiểm tra>`.
 
 ## Không bao giờ làm
 
@@ -49,7 +50,8 @@ Tài liệu gốc:
   - Không dùng `--no-verify`.
   - Không sửa `.gitignore` hay `.pre-commit-config.yaml` để cho file cấm đi qua.
 - **Thao tác git và GitHub nguy hiểm:**
-  - Không push thẳng `main`, không force-push, không viết lại lịch sử đã push.
+  - Không push khi người dùng chưa yêu cầu.
+  - Không force-push, không viết lại lịch sử đã push.
   - Không merge PR thay người.
   - Không tạo hay xóa repo, không đổi cài đặt org/repo.
 - **Thu thập dữ liệu sai quy tắc:**
@@ -67,14 +69,15 @@ Tài liệu gốc:
 
 ## Đổi schema hay hợp đồng dữ liệu
 
-- Sửa ở `joblens` **trước** (SemVer: thêm trường không bắt buộc thì tăng *minor*, đổi tên hoặc xóa thì tăng *major* và tạo `.vN` mới).
-- Repo môn chỉ cập nhật version sau khi `joblens` đã gắn tag.
-- Thấy cần đổi schema khi đang làm ở repo môn thì dừng và báo người dùng, không sửa bản sao cục bộ.
+- Sửa ở `joblens` **trước**, rồi mới sửa code ở repo môn. Không tạo bản sao schema trong repo môn.
+- Thêm trường hoặc cột không bắt buộc thì làm được ngay. **Đổi tên hoặc xóa** thì báo người dùng: phải hỏi nhóm đang dùng hợp đồng đó trước.
+- Đang làm ở repo môn mà thấy cần đổi hợp đồng thì nói rõ cần đổi gì ở `joblens`, không tự chế cách lách.
 
 ## Git
 
-- Làm trên nhánh `feat/…`, `fix/…` hoặc `docs/…`. Commit theo Conventional Commits, ví dụ `feat(crawler): thêm adapter ITviec`.
-- PR nhỏ, một mục đích. Mô tả PR có mục **AI** (công cụ, phần nào, ai kiểm tra). Việc chạm repo khác gắn nhãn `cross-repo`.
+- Trong repo môn, nhóm được push thẳng `main`. Agent chỉ commit hoặc push khi người dùng yêu cầu.
+- Commit theo Conventional Commits, ví dụ `feat(crawler): thêm adapter ITviec`.
+- Ở repo `joblens` nên dùng nhánh và PR để CI chạy. Việc cần repo khác làm thì gợi ý mở issue `cross-repo` ở repo đó.
 
 ## Trước khi báo xong
 
@@ -85,7 +88,7 @@ Tài liệu gốc:
 ## Hỏi người dùng thay vì đoán khi
 
 - Không xác định được file thuộc repo nào.
-- Thay đổi phá vỡ tương thích (*major*), đổi tên bảng, cột hoặc topic.
+- Đổi tên hoặc xóa trường, cột, bảng, topic trong hợp đồng.
 - Xóa file hay thư mục có sẵn.
 - Yêu cầu mâu thuẫn với quy tắc ở trên.
 

@@ -1,46 +1,42 @@
 <!-- ĐỒNG BỘ TỪ joblens/docs/project-plan/templates/CONTRIBUTING.md – sửa ở đó trước, không sửa tại đây -->
 # Đóng góp vào JobLens
 
-Bản rút gọn của [Quy tắc làm việc chung](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/project-plan/09-quy-tac-lam-viec-chung.md) – áp dụng như nhau ở cả 4 repo.
+Ba nhóm làm **song song**, mỗi nhóm một repo. Chỉ cần cẩn thận ở **chỗ nối** giữa các repo. Bản đầy đủ: [quy tắc làm việc chung](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/project-plan/09-quy-tac-lam-viec-chung.md).
 
-## Luồng làm việc
+## 1. Trong repo môn của mình: làm tự do
 
-1. Nhận hoặc tạo issue trên board chung của org; mỗi issue một người phụ trách.
-2. Tạo nhánh `feat/<mô-tả-ngắn>`, `fix/…` hoặc `docs/…` từ `main`.
-3. Trước khi tạo file mới, tra [file nào lên repo nào](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md) để chắc file thuộc repo này. File có bản gốc ở nơi khác (dòng đầu ghi `ĐỒNG BỘ TỪ` hoặc `SINH TỪ`) thì không sửa tại chỗ.
-4. Commit theo Conventional Commits: `feat(crawler): …`, `fix(dbt): …`, `docs(uml): …`.
-5. Ghi một mục vào `NHAT-KY.md` của repo (và của `joblens` nếu chạm repo khác) – [mẫu](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md#nhật-ký-thay-đổi).
-6. Mở PR và **tự review**: đọc lại toàn bộ diff theo checklist bên dưới.
-7. Squash merge khi CI pass. Không push thẳng `main`.
-8. Ngoại lệ: nếu PR có thể làm hỏng repo khác (contracts, đổi tên cột/bảng/topic), báo trong nhóm chat kèm link và chờ 24 giờ; thay đổi *major* chờ người phụ trách repo bị ảnh hưởng xác nhận.
+- Push thẳng `main` hoặc dùng nhánh, tùy bạn. Không bắt buộc PR, không cần ai duyệt.
+- Commit message ghi rõ thay đổi gì, ví dụ `feat(crawler): thêm adapter ITviec`, `fix(dbt): sửa đơn vị lương`.
+- Việc thường ngày không cần ghi nhật ký, lịch sử git là đủ.
+- Nếu dùng AI cho một phần đáng kể, thêm một dòng cuối commit message: `AI: <công cụ> – <phần nào>`.
 
-## Khi đụng tới schema
+## 2. Khi đụng chỗ nối giữa các repo
 
-Mở PR ở repo chung `joblens` (contracts) trước (SemVer: thêm trường không bắt buộc → minor; đổi tên/xóa → major kèm topic/bảng `.vN` mới). Chỉ sửa code ở repo này sau khi contracts đã được merge và gắn tag.
+Chỗ nối là **hợp đồng trong repo `joblens`** (schema Kafka, contract bảng, API – xem [danh sách](https://github.com/BD-WM-SA-D/joblens/blob/main/schemas/README.md)) và các file cấu hình chung.
 
-## Không được commit
+| Bạn muốn | Làm thế nào |
+|---|---|
+| Thêm trường hoặc cột mới (không bắt buộc) | Sửa ở `joblens`, nhắn nhóm chat một câu, ghi một dòng vào `joblens/NHAT-KY.md` |
+| Đổi tên hoặc xóa trường/cột, đổi topic hay bảng | Như trên, nhưng **hỏi người đang dùng** trong chat trước. Họ trả lời "ok" thì đổi |
+| Ghi vào bảng hay topic của repo khác | Không làm. Mỗi bảng, mỗi topic chỉ một repo ghi ([danh sách](https://github.com/BD-WM-SA-D/joblens/blob/main/schemas/README.md)). Cần dữ liệu thì nhắn nhóm kia |
+| Sửa `.gitignore`, pre-commit, `.env.example`, `AGENTS.md`… | Không sửa trong repo môn (dòng đầu file ghi `ĐỒNG BỘ TỪ`). Báo người giữ repo `joblens` sửa bản gốc rồi đồng bộ sang |
 
-Danh sách đầy đủ: [quy tắc 8](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/project-plan/09-quy-tac-lam-viec-chung.md#8-những-gì-không-được-đưa-lên-github). Tóm tắt:
+Thay đổi ở repo `joblens` nên đi qua PR để CI kiểm tra fixtures khớp schema, nhưng không cần chờ ai duyệt.
 
-- Bí mật (`.env`, key, token, kubeconfig) → `.env` đã gitignore hoặc Kubernetes Secret.
-- Dữ liệu crawl, tập nhãn, model, output notebook → object storage `s3://joblens/…`.
-- Dữ liệu cá nhân → không lưu ở đâu cả.
-- Slide/tài liệu có bản quyền của giảng viên.
+Không chắc file thuộc repo nào thì xem bảng tra nhanh ở đầu [repo-routing](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md).
 
-Sau khi clone, chạy `pre-commit install` để các lệnh chặn tự động hoạt động. Lỡ đẩy bí mật lên: đổi key ngay rồi báo nhóm.
+## 3. Không được commit
+
+Pre-commit chặn sẵn phần lớn các trường hợp. Sau khi clone, chạy `pre-commit install` một lần.
+
+- Bí mật (`.env`, key, token, kubeconfig): để trong `.env`, file này đã được gitignore.
+- Dữ liệu crawl, tập nhãn, model, output notebook: để trên `s3://joblens/…`.
+- Dữ liệu cá nhân: không lưu ở đâu cả.
+- Slide và tài liệu của giảng viên.
+
+Lỡ đẩy bí mật lên GitHub: đổi key ngay rồi báo nhóm.
 
 ## Môi trường
 
-- Python 3.12; `ruff`, `pytest`, `pre-commit` (chạy `pre-commit install` sau khi clone).
-- Biến môi trường theo tiền tố `JOBLENS_` – xem `.env.example`.
-
-## Checklist PR (tự review)
-
-- [ ] Đã tự đọc lại toàn bộ diff trên GitHub.
-- [ ] PR nhỏ, một mục đích.
-- [ ] File mới nằm đúng repo theo repo-routing; đã thêm dòng đánh dấu nếu là file mục C/E.
-- [ ] Đã ghi `NHAT-KY.md` (repo này, và `joblens` nếu ảnh hưởng repo khác).
-- [ ] Test/lint pass; không có dữ liệu hay bí mật trong diff.
-- [ ] Cập nhật tài liệu/ADR nếu thay đổi hành vi hoặc kiến trúc.
-- [ ] Ghi chú nếu có dùng AI (công cụ, phần nào, ai đã kiểm tra).
-- [ ] Nếu ảnh hưởng repo khác: gắn `cross-repo`, đã báo nhóm và chờ đủ 24 giờ.
+- Python 3.12; `ruff`, `pytest`, `pre-commit`.
+- Biến môi trường dùng tiền tố `JOBLENS_` – xem `.env.example`.
