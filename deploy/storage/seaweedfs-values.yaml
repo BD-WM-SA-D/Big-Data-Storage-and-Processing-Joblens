@@ -1,0 +1,36 @@
+# Helm values cho SeaweedFS (S3 API) – chart seaweedfs 4.48.2, ứng dụng 4.48.
+# Môi trường dev: một pod "all-in-one" (master + volume + filer + S3 gateway) trong namespace "lakehouse".
+# Thay MinIO Community (đã vào chế độ bảo trì) – docs/project-plan/03, bảng Tech stack.
+# Khóa S3 không nằm ở đây: install.sh tạo Secret "seaweedfs-s3-config" từ .env.
+
+# Chế độ all-in-one không tự tắt các thành phần riêng lẻ, nên phải tắt tay.
+master:
+  enabled: false
+volume:
+  enabled: false
+filer:
+  enabled: false
+
+allInOne:
+  enabled: true
+  replicas: 1
+  updateStrategy:
+    type: Recreate
+  s3:
+    enabled: true
+    enableAuth: true
+    existingConfigSecret: seaweedfs-s3-config
+    # Bucket duy nhất của dự án: s3://joblens/... (warehouse Iceberg, raw-html, model…)
+    createBuckets:
+      - name: joblens
+        anonymousRead: false
+  data:
+    type: persistentVolumeClaim
+    size: 20Gi
+  # Ngân sách: Postgres + SeaweedFS + Lakekeeper ~1,5 GB (docs/project-plan/03)
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      memory: 1Gi

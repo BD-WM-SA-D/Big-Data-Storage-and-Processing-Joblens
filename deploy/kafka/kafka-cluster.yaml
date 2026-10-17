@@ -1,0 +1,59 @@
+# Cụm Kafka cho môi trường dev (k3d): 1 node KRaft vừa là controller vừa là broker.
+# Phiên bản: Strimzi 1.2.0, Kafka 4.3.1 (joblens/versions.md). Không dùng ZooKeeper.
+# Áp dụng bằng deploy/kafka/install.sh – không tạo topic bằng CLI, topic khai báo ở topics.yaml.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  replicas: 1
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 10Gi
+        kraftMetadata: shared
+  # Ngân sách RAM cho Kafka ~1,5 GB (docs/project-plan/03, mục Triển khai)
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 250m
+    limits:
+      memory: 1536Mi
+  jvmOptions:
+    -Xms: 768m
+    -Xmx: 768m
+---
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: joblens
+  namespace: ingest
+spec:
+  kafka:
+    version: 4.3.1
+    metadataVersion: 4.3-IV0
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      # Một broker nên mọi hệ số nhân bản = 1
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+      # Topic chỉ được tạo qua KafkaTopic (AGENTS.md, quy tắc riêng của repo)
+      auto.create.topics.enable: false
+  entityOperator:
+    topicOperator: {}
+    userOperator: {}

@@ -1,0 +1,102 @@
+# Các topic Kafka của JobLens – theo bảng "Thiết kế Kafka" trong joblens/docs/project-plan/03-nen-tang-big-data.md
+# và schemas/README.md (ai ghi / ai đọc). Schema message nằm ở joblens/schemas/kafka/, không chép sang đây.
+# Tên topic có dấu gạch dưới không hợp lệ làm tên tài nguyên K8s, nên metadata.name dùng gạch ngang
+# và tên thật nằm ở spec.topicName.
+# Retention: 7 ngày = 604800000 ms, 3 ngày = 259200000 ms, 14 ngày = 1209600000 ms.
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: jobs-raw-topcv-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: jobs.raw.topcv.v1        # key = source_job_id; ghi: Web-mining (crawler)
+  partitions: 6
+  replicas: 1
+  config:
+    retention.ms: 604800000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: jobs-raw-itviec-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: jobs.raw.itviec.v1       # key = source_job_id; chưa có dữ liệu khi ITviec chưa cho phép crawl
+  partitions: 6
+  replicas: 1
+  config:
+    retention.ms: 604800000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: reviews-raw-itviec-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: reviews.raw.itviec.v1    # key = company_id
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 604800000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events-user-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: events.user.v1           # key = user_id; ghi: event-generator (repo này)
+  partitions: 6
+  replicas: 1
+  config:
+    retention.ms: 259200000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: dlq-parse-errors-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: dlq.parse_errors.v1      # key = source; ghi: Web-mining (parser)
+  partitions: 1
+  replicas: 1
+  config:
+    retention.ms: 1209600000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: app-alert-subscriptions-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: app.alert_subscriptions.v1   # key = subscription_id; ghi: PTTKHT (app) – ADR 0001 D4b
+  partitions: 3
+  replicas: 1
+  config:
+    cleanup.policy: compact
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: alerts-job-match-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  topicName: alerts.job_match.v1      # key = user_id; ghi: job streaming ghép cảnh báo (repo này)
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 259200000

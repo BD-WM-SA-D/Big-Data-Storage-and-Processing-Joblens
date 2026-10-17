@@ -1,0 +1,47 @@
+# Quyền cho Spark driver tạo pod executor trong namespace "compute" (spark-submit --master k8s://, cluster mode)
+# và volume giữ checkpoint của job streaming (offset Kafka đã xử lý).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: compute
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spark
+  namespace: compute
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: spark-driver
+  namespace: compute
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims"]
+    verbs: ["create", "get", "list", "watch", "delete", "deletecollection", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: spark-driver
+  namespace: compute
+subjects:
+  - kind: ServiceAccount
+    name: spark
+    namespace: compute
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: spark-driver
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: spark-checkpoints
+  namespace: compute
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

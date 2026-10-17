@@ -1,0 +1,50 @@
+# Helm values cho Lakekeeper (Iceberg REST catalog) – chart lakekeeper 0.12.0, ứng dụng v0.13.3.
+# Môi trường dev: không bật xác thực (auth) và phân quyền (authz = allowall) – chỉ truy cập trong cụm.
+# Mật khẩu Postgres và khóa mã hóa do install.sh tạo thành Secret, không ghi vào file này.
+
+catalog:
+  image:
+    tag: v0.13.3          # pin, không dùng latest (joblens/versions.md: Lakekeeper 0.12+)
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+authz:
+  backend: allowall
+
+# Khóa mã hóa các storage credential mà Lakekeeper lưu trong Postgres
+secretBackend:
+  type: Postgres
+  postgres:
+    encryptionKeySecret: lakekeeper-encryption
+    encryptionKeySecretKey: encryptionKey
+
+# Postgres đi kèm chart (groundhog2k/postgres 1.6.4, image chính thức "postgres").
+# Chart mặc định Postgres 18.4; pin 17.6 cho khớp joblens/versions.md ("16 hoặc 17").
+postgresql:
+  enabled: true
+  image:
+    tag: "17.6"
+  settings:
+    existingSecret: lakekeeper-pg
+    superuser:
+      secretKey: superuser
+    superuserPassword:
+      secretKey: superuser-password
+  userDatabase:
+    existingSecret: lakekeeper-pg
+    name:
+      secretKey: database
+    user:
+      secretKey: user
+    password:
+      secretKey: password
+  storage:
+    requestedSize: 5Gi
+
+# Chạy job migration DB như tài nguyên thường (không phải hook post-install), để "helm --wait" không bị kẹt
+helmWait: true

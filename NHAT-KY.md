@@ -2,6 +2,15 @@
 
 Chỉ ghi sự kiện đáng nhớ: đổi hợp đồng hoặc file cấu hình chung, ghép hệ thống, chốt số liệu, quyết định quan trọng. Việc thường ngày đã có lịch sử git. Mục mới đặt trên cùng, vài dòng là đủ – xem [repo-routing](https://github.com/BD-WM-SA-D/joblens/blob/main/docs/repo-routing.md), mục Nhật ký.
 
+## 2026-10-17 · LTD6205 · không qua PR
+
+- **Tạo:** `deploy/kafka/`, `deploy/storage/`, `deploy/trino/`, `deploy/spark/`, `deploy/lib.sh`, `deploy/smoke-e2e.sh`, `deploy/README.md`, `spark-jobs/bronze_jobs.py`, `spark-jobs/Dockerfile`, `tests/test_bronze_jobs.py`, `pyproject.toml`, `uv.lock`
+- **Sửa:** `deploy/compat.md` (dòng chạy đầu tiên)
+- **Xóa:** –
+- **Lý do:** ghép hệ thống lần đầu (walking skeleton P1): fixtures → Kafka → Spark streaming → Iceberg bronze.jobs_raw → Trino
+- **Ảnh hưởng repo khác:** smoke test ghi fixtures vào `jobs.raw.topcv.v1` (topic của Web-mining); cần chốt phiên bản SeaweedFS, Postgres trong `joblens/versions.md`
+- **AI:** Claude – soạn manifest, Helm values, script cài đặt, job Spark bronze và test; <người kiểm tra> đã kiểm tra
+
 ## 2026-10-02 · Hoang Le · chưa có PR
 
 - **Tạo:** –

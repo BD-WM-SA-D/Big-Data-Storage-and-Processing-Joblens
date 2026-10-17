@@ -1,0 +1,21 @@
+{
+  "warehouse-name": "joblens",
+  "project-id": "00000000-0000-0000-0000-000000000000",
+  "storage-profile": {
+    "type": "s3",
+    "flavor": "s3-compat",
+    "bucket": "joblens",
+    "key-prefix": "warehouse",
+    "endpoint": "http://seaweedfs-all-in-one.lakehouse.svc.cluster.local:8333",
+    "region": "${JOBLENS_S3_REGION}",
+    "path-style-access": true,
+    "sts-enabled": false,
+    "remote-signing-enabled": false
+  },
+  "storage-credential": {
+    "type": "s3",
+    "credential-type": "access-key",
+    "access-key-id": "${JOBLENS_S3_ACCESS_KEY_ID}",
+    "secret-access-key": "${JOBLENS_S3_SECRET_ACCESS_KEY}"
+  }
+}
