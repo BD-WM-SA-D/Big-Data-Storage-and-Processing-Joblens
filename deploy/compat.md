@@ -6,3 +6,4 @@ Mỗi buổi demo và mỗi lần chốt số liệu đều phải dựng lại 
 |---|---|---|---|---|---|---|
 | <yyyy-mm-dd> | v<x.y.z> | <image:x.y.z-sha> | v<x.y.z> | v<x.y.z> | <…> | <…> |
 | 2026-10-17 | 9432fed (walking skeleton) | – (chưa có image mining) | – | joblens@9750b1a | – | Smoke test fixtures → Kafka → Spark → bronze.jobs_raw → Trino đạt; Strimzi 1.2.0, SeaweedFS chart 4.48.0, Lakekeeper chart 0.12.0, Trino 483, spark-jobs:0.1.0-9432fed |
+| 2026-10-19 | 455fc2f (silver + gold, VietJobs) | – (chưa có image mining) | – | joblens@9750b1a | silver.job_postings snapshot 7734621906540530803 | VietJobs 48.092 tin → bronze (batch) → silver (MERGE) → dbt gold PASS=15; có địa điểm 0,985, có lương 0,715; spark-jobs:0.1.0-455fc2f; Strimzi 1.2.0, SeaweedFS 4.48.0, Lakekeeper 0.12.0, Trino 483, Spark 4.1.3, Iceberg 1.11.0 – kiểm tra: hieu |
