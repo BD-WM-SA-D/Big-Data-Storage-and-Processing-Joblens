@@ -78,6 +78,18 @@ def test_salary_out_of_range_dropped():
         (["Tiền Giang"], ["82"]),
         (["Thừa Thiên Huế"], ["46"]),
         (["hà đông"], ["01"]),  # quận của Hà Nội, top 3 VietJobs
+        # quận/huyện, thành phố hay gặp nhất trong địa điểm VietJobs chưa ánh xạ (scripts/check-locations.sql)
+        (["bắc từ liêm"], ["01"]),
+        (["cầu giấy"], ["01"]),
+        (["quận 7"], ["79"]),
+        (["Quận 12"], ["79"]),
+        (["bình thạnh"], ["79"]),
+        (["dĩ an"], ["79"]),  # Bình Dương cũ
+        (["tp vinh"], ["40"]),
+        (["tp buôn ma thuột"], ["66"]),
+        (["long khánh"], ["75"]),
+        (["vĩnh long"], ["86"]),  # không nhầm với "vinh"
+        (["san francisco"], []),
         (["Đồng Nai", "Hồ Chí Minh"], ["75", "79"]),
         (["Nước ngoài"], []),
         ([], []),

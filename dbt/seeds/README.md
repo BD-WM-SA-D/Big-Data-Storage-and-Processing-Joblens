@@ -10,3 +10,4 @@
 - **`aliases`:** các cách viết, nối bằng `|` (CSV không chứa được danh sách; model dbt tách thành mảng). So khớp không phân biệt hoa thường, dấu, tiền tố "Tỉnh/Thành phố/TP" và hậu tố "(cũ)" – xem `spark-jobs/normalize.py`. Thêm alias khi thấy địa điểm chưa ánh xạ được trong log của job silver.
 
 File này là **nguồn duy nhất** cho ánh xạ địa điểm: job Spark silver đọc chính file này (đóng vào image), dbt seed nạp thành bảng gold.
+- **Quận/huyện, thành phố trực thuộc tỉnh:** thêm vào `aliases` các tên hay gặp trong tin tuyển dụng (quận/huyện cũ của Hà Nội và TP.HCM, thành phố thuộc Bình Dương và Bà Rịa - Vũng Tàu cũ, Vinh, Buôn Ma Thuột, Long Khánh) – lấy từ `scripts/check-locations.sql` trên 48.092 tin VietJobs. Tên trùng giữa nhiều tỉnh (ví dụ "Tân Phú" cũng là huyện của Đồng Nai) gán cho nơi xuất hiện nhiều hơn trong dữ liệu.

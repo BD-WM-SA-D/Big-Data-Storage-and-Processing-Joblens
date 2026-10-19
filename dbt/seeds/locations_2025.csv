@@ -1,5 +1,5 @@
 location_code,name,region,aliases
-01,Thành phố Hà Nội,north,hà nội|hn|hà đông|hà tây
+01,Thành phố Hà Nội,north,hà nội|hn|hà đông|hà tây|ba đình|hoàn kiếm|tây hồ|long biên|cầu giấy|đống đa|hai bà trưng|hoàng mai|thanh xuân|nam từ liêm|bắc từ liêm|sơn tây|ba vì|chương mỹ|đan phượng|đông anh|gia lâm|hoài đức|mê linh|mỹ đức|phú xuyên|phúc thọ|quốc oai|sóc sơn|thạch thất|thanh oai|thanh trì|thường tín|ứng hòa
 04,Cao Bằng,north,cao bằng
 08,Tuyên Quang,north,tuyên quang|hà giang
 11,Điện Biên,north,điện biên
@@ -15,7 +15,7 @@ location_code,name,region,aliases
 33,Hưng Yên,north,hưng yên|thái bình
 37,Ninh Bình,north,ninh bình|hà nam|nam định
 38,Thanh Hóa,central,thanh hóa
-40,Nghệ An,central,nghệ an
+40,Nghệ An,central,nghệ an|vinh
 42,Hà Tĩnh,central,hà tĩnh
 44,Quảng Trị,central,quảng trị|quảng bình
 46,Thành phố Huế,central,huế|thừa thiên huế|thừa thiên - huế
@@ -23,10 +23,10 @@ location_code,name,region,aliases
 51,Quảng Ngãi,central,quảng ngãi|kon tum
 52,Gia Lai,central,gia lai|bình định|quy nhơn
 56,Khánh Hòa,central,khánh hòa|ninh thuận|nha trang
-66,Đắk Lắk,central,đắk lắk|đắc lắc|phú yên
+66,Đắk Lắk,central,đắk lắk|đắc lắc|phú yên|buôn ma thuột|buôn mê thuột
 68,Lâm Đồng,central,lâm đồng|đắk nông|đắc nông|bình thuận|đà lạt
-75,Đồng Nai,south,đồng nai|bình phước|biên hòa
-79,Thành phố Hồ Chí Minh,south,hồ chí minh|hcm|tphcm|sài gòn|ho chi minh city|bình dương|bà rịa - vũng tàu|bà rịa vũng tàu|vũng tàu|thủ đức
+75,Đồng Nai,south,đồng nai|bình phước|biên hòa|long khánh
+79,Thành phố Hồ Chí Minh,south,hồ chí minh|hcm|tphcm|sài gòn|ho chi minh city|bình dương|bà rịa - vũng tàu|bà rịa vũng tàu|vũng tàu|thủ đức|quận 1|quận 2|quận 3|quận 4|quận 5|quận 6|quận 7|quận 8|quận 9|quận 10|quận 11|quận 12|bình thạnh|gò vấp|phú nhuận|tân bình|tân phú|bình tân|củ chi|hóc môn|bình chánh|nhà bè|cần giờ|thủ dầu một|dĩ an|thuận an|bến cát|tân uyên|bà rịa|phú mỹ
 80,Tây Ninh,south,tây ninh|long an
 82,Đồng Tháp,south,đồng tháp|tiền giang
 86,Vĩnh Long,south,vĩnh long|bến tre|trà vinh

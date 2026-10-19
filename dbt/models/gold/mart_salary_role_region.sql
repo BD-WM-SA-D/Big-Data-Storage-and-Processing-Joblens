@@ -40,7 +40,7 @@ agg as (
         approx_percentile(salary_mid_vnd, 0.25) as p25,
         approx_percentile(salary_mid_vnd, 0.50) as p50,
         approx_percentile(salary_mid_vnd, 0.75) as p75,
-        avg(case when salary_is_negotiable then 1.0 else 0.0 end) as negotiable_share
+        avg(case when salary_is_negotiable then 1e0 else 0e0 end) as negotiable_share  -- double (1.0 là DECIMAL(2,1) trong Trino)
     from exploded
     group by grouping sets (
         (month, category_source, level_code, location_code),
