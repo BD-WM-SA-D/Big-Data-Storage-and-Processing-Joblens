@@ -1,0 +1,28 @@
+# dbt cho tầng gold của JobLens – chạy trên Trino (catalog iceberg). Chạy bằng scripts/dbt.sh.
+name: joblens_gold
+version: "0.1.0"
+config-version: 2
+profile: joblens
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+seeds:
+  joblens_gold:
+    +schema: staging
+    locations_2025:
+      +column_types:
+        location_code: varchar   # giữ số 0 đầu (01, 04, 08)
+        name: varchar
+        region: varchar
+        aliases: varchar
+
+models:
+  joblens_gold:
+    gold:
+      +schema: gold
+      +materialized: table

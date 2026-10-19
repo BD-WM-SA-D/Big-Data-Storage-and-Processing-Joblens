@@ -1,4 +1,4 @@
-# Helm values cho SeaweedFS (S3 API) – chart seaweedfs 4.48.2, ứng dụng 4.48.
+# Helm values cho SeaweedFS (S3 API) – chart seaweedfs 4.48.0, ứng dụng 4.48.
 # Môi trường dev: một pod "all-in-one" (master + volume + filer + S3 gateway) trong namespace "lakehouse".
 # Thay MinIO Community (đã vào chế độ bảo trì) – docs/project-plan/03, bảng Tech stack.
 # Khóa S3 không nằm ở đây: install.sh tạo Secret "seaweedfs-s3-config" từ .env.

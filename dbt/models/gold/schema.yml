@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: dim_location
+    description: Danh mục 34 tỉnh/thành sau sắp xếp 2025 – contract joblens gold.dim_location 0.1.0
+    data_tests:
+      - row_count_equals:
+          arguments:
+            expected: 34
+    columns:
+      - name: location_code
+        data_tests: [not_null, unique]
+      - name: region
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [north, central, south]
+
+  - name: mart_salary_role_region
+    description: Mặt bằng lương theo nhóm nghề × cấp bậc × tỉnh/thành – contract joblens gold.mart_salary_role_region 0.1.1
+    columns:
+      - name: month
+        data_tests: [not_null]
+      - name: job_count
+        data_tests: [not_null]
+      - name: location_code
+        data_tests:
+          - relationships_or_all:
+              arguments:
+                to: ref('dim_location')
+                field: location_code

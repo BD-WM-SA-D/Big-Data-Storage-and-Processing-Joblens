@@ -1,0 +1,14 @@
+# Profile dbt – không chứa bí mật (Trino dev không bật xác thực). Địa chỉ đổi bằng biến môi trường.
+joblens:
+  target: dev
+  outputs:
+    dev:
+      type: trino
+      method: none
+      user: "{{ env_var('DBT_TRINO_USER', 'dbt') }}"
+      host: "{{ env_var('DBT_TRINO_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_TRINO_PORT', '8080') | int }}"
+      http_scheme: http
+      database: iceberg
+      schema: gold
+      threads: 2

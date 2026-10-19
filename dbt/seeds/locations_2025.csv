@@ -1,0 +1,35 @@
+location_code,name,region,aliases
+01,Thành phố Hà Nội,north,hà nội|hn|hà đông|hà tây
+04,Cao Bằng,north,cao bằng
+08,Tuyên Quang,north,tuyên quang|hà giang
+11,Điện Biên,north,điện biên
+12,Lai Châu,north,lai châu
+14,Sơn La,north,sơn la
+15,Lào Cai,north,lào cai|yên bái
+19,Thái Nguyên,north,thái nguyên|bắc kạn|bắc cạn
+20,Lạng Sơn,north,lạng sơn
+22,Quảng Ninh,north,quảng ninh|hạ long
+24,Bắc Ninh,north,bắc ninh|bắc giang
+25,Phú Thọ,north,phú thọ|vĩnh phúc|hòa bình
+31,Thành phố Hải Phòng,north,hải phòng|hải dương
+33,Hưng Yên,north,hưng yên|thái bình
+37,Ninh Bình,north,ninh bình|hà nam|nam định
+38,Thanh Hóa,central,thanh hóa
+40,Nghệ An,central,nghệ an
+42,Hà Tĩnh,central,hà tĩnh
+44,Quảng Trị,central,quảng trị|quảng bình
+46,Thành phố Huế,central,huế|thừa thiên huế|thừa thiên - huế
+48,Thành phố Đà Nẵng,central,đà nẵng|quảng nam
+51,Quảng Ngãi,central,quảng ngãi|kon tum
+52,Gia Lai,central,gia lai|bình định|quy nhơn
+56,Khánh Hòa,central,khánh hòa|ninh thuận|nha trang
+66,Đắk Lắk,central,đắk lắk|đắc lắc|phú yên
+68,Lâm Đồng,central,lâm đồng|đắk nông|đắc nông|bình thuận|đà lạt
+75,Đồng Nai,south,đồng nai|bình phước|biên hòa
+79,Thành phố Hồ Chí Minh,south,hồ chí minh|hcm|tphcm|sài gòn|ho chi minh city|bình dương|bà rịa - vũng tàu|bà rịa vũng tàu|vũng tàu|thủ đức
+80,Tây Ninh,south,tây ninh|long an
+82,Đồng Tháp,south,đồng tháp|tiền giang
+86,Vĩnh Long,south,vĩnh long|bến tre|trà vinh
+91,An Giang,south,an giang|kiên giang|phú quốc
+92,Thành phố Cần Thơ,south,cần thơ|sóc trăng|hậu giang
+96,Cà Mau,south,cà mau|bạc liêu

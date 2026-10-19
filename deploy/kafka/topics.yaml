@@ -100,3 +100,19 @@ spec:
   replicas: 1
   config:
     retention.ms: 259200000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: jobs-raw-vietjobs-v1
+  namespace: ingest
+  labels:
+    strimzi.io/cluster: joblens
+spec:
+  # key = source_job_id; ghi: spark-jobs/vietjobs.py --sink kafka (replay VietJobs cho demo và đo tải –
+  # schema job_posting.v1 cho phép source = vietjobs khi replay). Cần thêm dòng vào joblens/schemas/README.md.
+  topicName: jobs.raw.vietjobs.v1
+  partitions: 6
+  replicas: 1
+  config:
+    retention.ms: 604800000

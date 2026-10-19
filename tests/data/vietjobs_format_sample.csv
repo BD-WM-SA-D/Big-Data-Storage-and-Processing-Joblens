@@ -1,0 +1,8 @@
+job_title,location,country,qualifications,technical_skills,soft_skills,languages_required,experience_required,salary,contract_type,working_hours,benefits,description,requirements_text,category,salary_min,salary_max,salary_avg
+Nhân Viên Vận Hành Máy Mẫu,hồ chí minh,Việt Nam,['Tốt nghiệp cao đẳng'],,['Làm việc nhóm'],,1 năm,15.0 - 22.0 triệu,Toàn thời gian,Thứ 2 - Thứ 6 (từ 08:00 đến 17:00),"['Thưởng năm', 'Lương tháng 13']","- Vận hành máy mẫu tại TP HCM (cũ)
+- Ghi sổ, báo cáo ""ca"" hằng ngày","- Tốt nghiệp cao đẳng, đại học",nông_nghiệp_năng_lượng_môi_trường,15,22,18 triệu
+Lập Trình Viên Python Mẫu,"hà nội, hồ chí minh",Việt Nam,[],"['Python', 'SQL']",[],['Tiếng Anh'],2 năm,20.0 - 30.0 triệu,"Toàn thời gian, Bán thời gian",,[],"Phát triển dịch vụ dữ liệu, viết API, tối ưu truy vấn.","Có kinh nghiệm Python, SQL",công_nghệ_thông_tin_kỹ_thuật_số,20,30,25 triệu
+Thực Tập Sinh Kế Toán Mẫu,bình dương,Việt Nam,[],['Excel'],[],,Không yêu cầu,4.0 triệu,Thực tập,,['Phụ cấp ăn trưa'],Hỗ trợ kế toán tổng hợp.,Sinh viên năm cuối,tài_chính_kế_toán_ngân_hàng_bảo_hiểm,4,4,4 triệu
+Nhân Viên Kinh Doanh Mẫu,đà nẵng,Việt Nam,[],,['Giao tiếp'],,6 tháng,Thỏa thuận,Toàn thời gian,,['Thưởng doanh số'],"Tìm kiếm khách hàng mới, chăm sóc khách hàng cũ.",Kỹ năng giao tiếp tốt,kinh_doanh_bán_hàng_chăm_sóc_khách_hàng,0,0,0 triệu
+,hà nội,Việt Nam,[],,[],,,,,,[],Dòng thiếu tiêu đề – phải bị bỏ qua.,,khác,0,0,
+Kỹ Sư Cầu Đường Mẫu,hà đông,Việt Nam,['Đại học xây dựng'],['AutoCAD'],[],,5 năm,25.0 - 35.0 triệu,Toàn thời gian,,['Bảo hiểm đầy đủ'],"Thiết kế, giám sát thi công.",5 năm kinh nghiệm,xây_dựng_kiến_trúc_bất_động_sản,25,35,30 triệu

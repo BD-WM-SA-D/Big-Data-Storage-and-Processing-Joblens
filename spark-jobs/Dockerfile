@@ -1,7 +1,8 @@
 # Image chạy các Spark job của JobLens trên Kubernetes (spark-submit --master k8s://, docs/project-plan/03).
 # Spark 4.1.3 (JDK 17) + Iceberg 1.11.0 + connector Kafka – phiên bản theo joblens/versions.md.
 # Thư viện tải sẵn vào image để job không phải tải Maven lúc chạy (tái lập được, chạy được khi offline).
-# Build bằng deploy/spark/submit.sh (gắn tag version-gitsha, không dùng latest).
+# Build bằng deploy/spark/submit.sh từ GỐC repo (docker build -f spark-jobs/Dockerfile .) – context lọc bởi .dockerignore.
+# Gắn tag version-gitsha, không dùng latest.
 FROM apache/spark:4.1.3-scala2.13-java17-python3-ubuntu
 
 ARG SPARK_VERSION=4.1.3
@@ -24,7 +25,12 @@ RUN set -eux; cd /opt/spark/jars; \
       curl -fsSL -o "$f" "${MAVEN}/${coord}"; \
       echo "$(curl -fsSL "${MAVEN}/${coord}.sha1" | cut -c1-40)  $f" | sha1sum -c -; \
     done; \
-    chmod 644 /opt/spark/jars/*.jar
+    chmod 644 /opt/spark/jars/*.jar; \
+    pip install --no-cache-dir boto3==1.43.114
 
-COPY --chown=spark:spark *.py /opt/joblens/
+# Mã job + bảng ánh xạ địa điểm (nguồn duy nhất: dbt/seeds/locations_2025.csv)
+COPY --chown=spark:spark spark-jobs/*.py /opt/joblens/
+COPY --chown=spark:spark dbt/seeds/locations_2025.csv /opt/joblens/locations_2025.csv
+ENV PYTHONPATH=/opt/joblens \
+    JOBLENS_LOCATIONS_CSV=/opt/joblens/locations_2025.csv
 USER spark

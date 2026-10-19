@@ -1,0 +1,25 @@
+version: 2
+
+sources:
+  - name: silver
+    database: iceberg
+    schema: silver
+    description: Bảng silver do spark-jobs/silver_job_postings.py ghi (contract joblens).
+    tables:
+      - name: job_postings
+        description: Tin đã chuẩn hóa – joblens/schemas/tables/silver/job_postings.yaml 0.2.0
+        columns:
+          - name: job_uid
+            data_tests: [not_null, unique]
+          - name: salary_is_negotiable
+            data_tests: [not_null]
+          - name: level_code
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [intern, junior, mid, senior, lead, manager, other]
+          - name: employment_type_code
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [full_time, part_time, contract, internship, other]
