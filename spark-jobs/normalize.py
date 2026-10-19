@@ -132,6 +132,10 @@ def parse_salary(
         return None, None, False, currency  # không phải lương tháng
 
     nums = [n for n in (_to_number(t) for t in _NUM.findall(raw)) if n is not None]
+    if nums and all(n == 0 for n in nums):
+        # VietJobs ghi tin "Thỏa thuận" thành "0.0 triệu" (28,5% số tin – khớp con số 71,5% tin có
+        # khoảng lương trong bài báo VietJobs) → coi là thỏa thuận, không phải lương 0
+        return None, None, True, None
     if not nums:
         return None, None, False, currency
 
@@ -209,7 +213,12 @@ _LEVEL_TEXT = [  # (mẫu trên chuỗi đã fold, mã) – thứ tự quan tr�
     (r"junior|fresher|moi tot nghiep|entry", "junior"),
     (r"\bmiddle\b|\bmid\b", "mid"),
 ]
-_GENERIC_STAFF = re.compile(r"nhan vien|chuyen vien|staff|employee|ky su|engineer")
+_GENERIC_STAFF = re.compile(
+    r"nhan vien|chuyen vien|staff|employee|ky su|engineer|executive|specialist|ky thuat vien"
+)
+_MANAGER_TITLE = re.compile(
+    r"truong phong|pho phong|giam doc|director|manager|head of|truong bo phan|truong chi nhanh|truong ban"
+)
 
 
 def _match_level(f: str) -> str | None:
@@ -232,7 +241,16 @@ def level_code(
     code = _match_level(lf)
     if code:
         return code
-    code = _match_level(fold(title))
+    ft = fold(title)
+    code = _match_level(ft)
+    # "Nhân viên giám sát kho", "Chuyên viên quản lý dự án": quản lý/giám sát ở đây là công việc, không phải
+    # cấp bậc → chỉ tính manager khi tiêu đề có chức danh quản lý thật hoặc không có từ chỉ nhân viên
+    if (
+        code == "manager"
+        and _GENERIC_STAFF.search(ft)
+        and not _MANAGER_TITLE.search(ft)
+    ):
+        code = None
     if code:
         return code
     if experience_min is not None and (not lf or _GENERIC_STAFF.search(lf)):

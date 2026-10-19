@@ -33,6 +33,8 @@ M = 1_000_000
         ("10 triệu", (10 * M, 10 * M, False, "VND")),
         ("25 - 15 triệu", (15 * M, 25 * M, False, "VND")),  # đảo thứ tự
         ("Thỏa thuận", (None, None, True, None)),
+        ("0.0 triệu", (None, None, True, None)),  # VietJobs ghi tin thỏa thuận thành 0
+        ("0 - 0 triệu", (None, None, True, None)),
         ("Thoả thuận", (None, None, True, None)),  # dấu đặt khác chỗ
         ("Cạnh tranh", (None, None, True, None)),
         ("1,000 - 2,000 USD", (26 * M, 52 * M, False, "USD")),
@@ -187,6 +189,14 @@ def test_parse_experience(text, expected):
         ),  # VietJobs: không có cấp bậc → suy từ kinh nghiệm
         (None, "Kỹ thuật viên", None, None),
         ("Phó giám đốc", None, None, "manager"),
+        # "giám sát"/"quản lý" là công việc của nhân viên, không phải cấp bậc
+        (None, "Nhân Viên Giám Sát Kho", 1.0, "junior"),
+        (None, "Chuyên Viên Quản Lý Dự Án", 3.0, "mid"),
+        (None, "Kỹ Sư Giám Sát Thi Công", 6.0, "senior"),
+        (None, "Quản Lý Cửa Hàng", 2.0, "manager"),
+        (None, "Giám Sát Bán Hàng", None, "manager"),
+        (None, "Trưởng Phòng Kinh Doanh", 5.0, "manager"),
+        (None, "Chuyên Viên Kinh Doanh - Trưởng Phòng", 5.0, "manager"),
     ],
 )
 def test_level_code(level, title, exp, expected):
