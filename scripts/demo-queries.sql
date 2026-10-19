@@ -28,7 +28,7 @@ WHERE category_source = 'ALL' AND location_code = 'ALL' AND level_code <> 'ALL'
 ORDER BY salary_median_vnd DESC NULLS LAST;
 
 -- 6. Iceberg: lịch sử snapshot của silver (mỗi lần MERGE là một snapshot) – time travel được
-SELECT snapshot_id, committed_at, operation, summary['added-records'] AS them, summary['deleted-records'] AS xoa
+SELECT snapshot_id, committed_at, operation, element_at(summary, 'added-records') AS them, element_at(summary, 'deleted-records') AS xoa
 FROM iceberg.silver."job_postings$snapshots" ORDER BY committed_at;
 
 -- 7. Iceberg: số file và kích thước trung bình (sức khỏe bảng – nhiều file nhỏ do streaming)

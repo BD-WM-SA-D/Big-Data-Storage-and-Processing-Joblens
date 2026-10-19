@@ -30,12 +30,15 @@ sleep 3
 uv run --quiet --with "boto3>=1.35" python - "$CSV" "${JOBLENS_S3_BUCKET:-joblens}" "$KEY" <<'PY'
 import os, sys
 import boto3
+from botocore.config import Config
 path, bucket, key = sys.argv[1:4]
+# SeaweedFS: bắt buộc path-style (http://host/bucket/key) – kiểu mặc định đưa bucket vào tên miền
 s3 = boto3.client("s3", endpoint_url="http://localhost:18333", region_name=os.environ["JOBLENS_S3_REGION"],
+                  config=Config(s3={"addressing_style": "path"}),
                   aws_access_key_id=os.environ["JOBLENS_S3_ACCESS_KEY_ID"],
                   aws_secret_access_key=os.environ["JOBLENS_S3_SECRET_ACCESS_KEY"])
 s3.upload_file(path, bucket, key)
 size = s3.head_object(Bucket=bucket, Key=key)["ContentLength"]
-print(f"    đã tải lên {size:,} byte")
+print(f"    đã tải lên {size:,} byte → s3://{bucket}/{key}")
 PY
 echo "Xong. Nạp vào bronze:  DRIVER_MEMORY=2g bash deploy/spark/submit.sh vietjobs --sink bronze"

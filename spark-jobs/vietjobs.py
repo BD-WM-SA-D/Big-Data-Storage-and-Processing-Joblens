@@ -116,9 +116,15 @@ def read_rows(text_stream: Iterable[str]) -> Iterator[tuple[int, dict]]:
 
 def _download_s3(uri: str) -> io.TextIOWrapper:
     import boto3  # có trong image spark-jobs
+    from botocore.config import Config
 
     bucket, key = uri.removeprefix("s3://").split("/", 1)
-    s3 = boto3.client("s3", endpoint_url=os.environ["JOBLENS_S3_ENDPOINT"])
+    # SeaweedFS: bắt buộc path-style (http://host/bucket/key); kiểu mặc định đưa bucket vào tên miền
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=os.environ["JOBLENS_S3_ENDPOINT"],
+        config=Config(s3={"addressing_style": "path"}),
+    )
     local = f"/tmp/{os.path.basename(key)}"
     s3.download_file(bucket, key, local)
     return open(local, encoding="utf-8", newline="")
