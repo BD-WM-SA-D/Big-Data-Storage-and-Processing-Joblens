@@ -2,8 +2,11 @@
 
 Hai chế độ (docs/project-plan/03, thí nghiệm batch vs streaming):
   --sink bronze   Đường A – batch: ghi thẳng vào Iceberg bronze.jobs_raw (kafka_topic = 'backfill.vietjobs').
+                  Chạy bằng Spark: bash deploy/spark/submit.sh vietjobs --sink bronze
   --sink kafka    Replay: gửi từng đợt vào topic jobs.raw.vietjobs.v1 với tốc độ --rate tin/giây, để job
-                  streaming bronze_jobs nạp tiếp (đường B) – dùng cho demo và đo tải.
+                  streaming bronze_jobs nạp tiếp (đường B) – dùng cho demo và đo tải. Đóng vai nguồn sự kiện
+                  (như crawler) nên KHÔNG cần Spark: producer Python (confluent-kafka) chạy trong một pod nhỏ –
+                  bash deploy/data/replay-vietjobs.sh (~300 MB RAM thay vì driver + executor Spark ~2,5 GB).
 
 File CSV gốc (18 cột: job_title, location, country, qualifications, technical_skills, soft_skills,
 languages_required, experience_required, salary, contract_type, working_hours, benefits, description,
@@ -22,6 +25,7 @@ import ast
 import csv
 import hashlib
 import io
+import itertools
 import json
 import logging
 import os
@@ -146,10 +150,6 @@ def main(argv: list[str] | None = None) -> None:
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
 
-    from pyspark.sql import functions as F
-
-    import bronze_jobs
-
     crawl_ts = datetime.now(timezone.utc).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )  # VietJobs không có ngày: dùng thời điểm nạp
@@ -158,11 +158,22 @@ def main(argv: list[str] | None = None) -> None:
         if args.input.startswith("s3://")
         else open(args.input, encoding="utf-8", newline="")
     )
-    with stream:
-        msgs = [to_message(r, i, crawl_ts) for i, r in read_rows(stream)]
-    if args.limit:
-        msgs = msgs[: args.limit]
+    with (
+        stream
+    ):  # cắt --limit ngay khi đọc để pod replay không giữ cả 48k tin trong RAM
+        rows = itertools.islice(read_rows(stream), args.limit or None)
+        msgs = [to_message(r, i, crawl_ts) for i, r in rows]
     log.info("đọc %s tin VietJobs từ %s", len(msgs), args.input)
+
+    if args.sink == "kafka":
+        replay_to_kafka(
+            msgs, os.environ["JOBLENS_KAFKA_BOOTSTRAP"], args.rate, args.batch
+        )
+        return
+
+    from pyspark.sql import functions as F
+
+    import bronze_jobs
 
     spark = bronze_jobs.build_session(f"vietjobs-{args.sink}")
     if args.sink == "bronze":
@@ -190,27 +201,59 @@ def main(argv: list[str] | None = None) -> None:
         log.info("đã ghi %s dòng vào %s", out.count(), bronze_jobs.TABLE)
         return
 
+
+def replay_to_kafka(
+    msgs: list[dict],
+    bootstrap: str,
+    rate: float,
+    batch: int,
+    producer=None,
+    sleep=time.sleep,
+) -> int:
+    """Gửi message vào REPLAY_TOPIC theo đợt `batch` tin, giữ tốc độ ~`rate` tin/giây. Trả số tin đã gửi.
+
+    key = source_job_id → cùng một tin luôn vào cùng partition (thứ tự theo tin). acks=all + idempotence:
+    gửi lại khi lỗi mạng không sinh bản trùng trong Kafka.
+    """
+    if producer is None:
+        from confluent_kafka import Producer
+
+        producer = Producer(
+            {
+                "bootstrap.servers": bootstrap,
+                "acks": "all",
+                "enable.idempotence": True,
+                "linger.ms": 20,
+                "compression.type": "lz4",
+            }
+        )
+    failed: list[str] = []
+
+    def on_delivery(err, msg) -> None:
+        if err is not None:
+            failed.append(str(err))
+
     sent = 0
-    for start in range(0, len(msgs), args.batch):
+    for start in range(0, len(msgs), batch):
         t0 = time.monotonic()
-        chunk = msgs[start : start + args.batch]
-        df = spark.createDataFrame(
-            [(m["source_job_id"], json.dumps(m, ensure_ascii=False)) for m in chunk],
-            "key string, value string",
-        )
-        (
-            df.write.format("kafka")
-            .option("kafka.bootstrap.servers", os.environ["JOBLENS_KAFKA_BOOTSTRAP"])
-            .option("kafka.acks", "all")
-            .option("kafka.enable.idempotence", "true")
-            .option("topic", REPLAY_TOPIC)
-            .save()
-        )
+        chunk = msgs[start : start + batch]
+        for m in chunk:
+            producer.produce(
+                REPLAY_TOPIC,
+                key=m["source_job_id"].encode(),
+                value=json.dumps(m, ensure_ascii=False).encode(),
+                on_delivery=on_delivery,
+            )
+            producer.poll(0)
+        producer.flush(60)
+        if failed:
+            raise RuntimeError(f"Kafka từ chối {len(failed)} tin, ví dụ: {failed[0]}")
         sent += len(chunk)
         log.info("replay: đã gửi %s/%s tin vào %s", sent, len(msgs), REPLAY_TOPIC)
-        wait = len(chunk) / args.rate - (time.monotonic() - t0)
-        if wait > 0:
-            time.sleep(wait)
+        wait = len(chunk) / rate - (time.monotonic() - t0)
+        if wait > 0 and sent < len(msgs):
+            sleep(wait)
+    return sent
 
 
 if __name__ == "__main__":

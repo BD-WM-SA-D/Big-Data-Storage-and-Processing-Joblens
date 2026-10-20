@@ -7,9 +7,10 @@ Thứ tự cài cho môi trường dev (một máy, cụm k3d `joblens` 1 server
 | 0 | `cp .env.example .env && uv sync` | – | Biến môi trường, Python + pyspark (để chạy `spark-submit`) |
 | 1 | `bash deploy/kafka/install.sh` | `ingest` | Strimzi 1.2.0, Kafka 4.3.1 KRaft 1 node, 7 topic (`deploy/kafka/topics.yaml`) |
 | 2 | `bash deploy/storage/install.sh` | `lakehouse` | SeaweedFS 4.48 (S3, bucket `joblens`), Lakekeeper v0.13.3 + Postgres 17.6, warehouse `joblens` |
-| 3 | `bash deploy/trino/install.sh` | `serving` | Trino 483 (1 coordinator + 1 worker), catalog `iceberg` |
+| 3 | `bash deploy/trino/install.sh` | `serving` | Trino 483 (một node: coordinator kiêm worker – vừa máy 16 GB), catalog `iceberg` |
 | 4 | `bash deploy/smoke-e2e.sh` | `compute` | Fixtures → Kafka → Spark streaming → `bronze.jobs_raw` → Trino |
 | 5 | `bash deploy/data/upload-vietjobs.sh` | `lakehouse` | Tải VietJobs (Hugging Face) → `s3://joblens/raw/vietjobs/` |
+| (demo) | `bash deploy/data/replay-vietjobs.sh 3000 50` | `compute` | Pod producer Python gửi tin VietJobs vào `jobs.raw.vietjobs.v1` cho job streaming |
 | 6 | `DRIVER_MEMORY=2g bash deploy/spark/submit.sh vietjobs --sink bronze` | `compute` | 48k tin VietJobs vào `bronze.jobs_raw` (đường A – batch) |
 | 7 | `bash deploy/spark/submit.sh silver_job_postings` | `compute` | `bronze.jobs_raw` → `silver.job_postings` (MERGE) + `silver.job_postings_snapshot` |
 | 8 | `bash scripts/dbt.sh build` | `serving` (Trino) | Seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 12 test dữ liệu |
@@ -57,3 +58,10 @@ Từ máy mình: `bash scripts/demo-ui.sh` mở cùng lúc Grafana (3000), Kafka
 ```bash
 k3d cluster delete joblens && k3d cluster create joblens --servers 1 --agents 2
 ```
+
+## Máy dev 16 GB RAM
+
+Cấu hình đã thu nhỏ: Trino một node (~1,8 GB), Kafka heap 512 MB và chỉ có topic operator, Airflow LocalExecutor
+(~1,5 GB), Kafka UI heap 192 MB, replay Kafka bằng producer Python. Cho WSL `memory=12GB`, `swap=8GB` trong
+`C:\Users\<tên>\.wslconfig`. Không chạy job streaming và DAG Airflow cùng lúc: `bash scripts/demo-mode.sh streaming|airflow`.
+Xem RAM: `bash scripts/demo-mode.sh status`.

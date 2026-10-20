@@ -41,10 +41,21 @@ Tùy chọn – k9s để xem cụm trực quan trong terminal:
 curl -sL https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_amd64.tar.gz | tar xz -C ~/.local/bin k9s
 ```
 
-**RAM.** Toàn bộ nền tảng + Airflow + Grafana cần khoảng 12–14 GB cho WSL. Kiểm tra `free -g` trong WSL; nếu thiếu,
-tạo `C:\Users\<tên>\.wslconfig` với `[wsl2]` / `memory=14GB` rồi chạy `wsl --shutdown` trong PowerShell (máy cần
-≥ 16 GB RAM). Máy yếu hơn: không chạy streaming và DAG cùng lúc (kịch bản bên dưới đã tách), hạ
-`EXECUTOR_MEMORY=768m`.
+**RAM (máy 16 GB).** Cấu hình trong repo đã thu nhỏ cho máy 16 GB: Trino một node, Kafka heap 512 MB, Airflow
+LocalExecutor, replay Kafka bằng producer Python (không cần Spark). Lúc nhàn rỗi cả cụm ~8 GB; lúc chạy streaming
+~10 GB. Cho WSL 12 GB:
+
+1. Tạo `C:\Users\Admin\.wslconfig`:
+   ```
+   [wsl2]
+   memory=12GB
+   swap=8GB
+   ```
+2. PowerShell: `wsl --shutdown`, mở lại Ubuntu (Docker Desktop tự bật lại cụm k3d), đợi `kubectl get pods -A` hết
+   `Pending`/`ContainerCreating`.
+3. Trong buổi demo **không chạy streaming và Airflow cùng lúc** – `scripts/demo-mode.sh` chuyển giữa hai chế độ
+   (mục 3). Đóng bớt ứng dụng Windows khác, trình duyệt chỉ mở các tab cần thiết.
+4. Kiểm tra bất cứ lúc nào: `bash scripts/demo-mode.sh status` (RAM từng node, pod dùng nhiều RAM nhất).
 
 ## 2. Chuẩn bị (trước buổi demo ít nhất 1 ngày)
 
@@ -64,34 +75,37 @@ Trước giờ demo 15 phút:
 - Trình duyệt mở sẵn các tab theo thứ tự: Grafana → Kafka UI (topic `jobs.raw.vietjobs.v1`) → Spark UI → Airflow →
   Trino UI → SeaweedFS. Grafana chọn khoảng thời gian **Last 15 minutes**, làm mới **5s**.
 - Terminal B, C để trống cho phần streaming.
+- Chạy `bash scripts/demo-mode.sh streaming` (tạm tắt scheduler Airflow; giao diện Airflow vẫn mở được).
 
 | Phút | Phần | Làm gì trên màn hình | Ý chính |
 |---|---|---|---|
 | 0–2 | Kiến trúc | Sơ đồ `joblens/docs/project-plan/03`; `k9s` (gõ `:ns`) – mỗi tầng một namespace: `ingest` (Kafka), `lakehouse` (SeaweedFS + Lakekeeper), `compute` (Spark), `serving` (Trino), `orchestration` (Airflow), `monitoring` | 4 tầng Store/Move/Process/Query (L01); mọi thứ chạy trên K8s |
 | 2–4 | Lưu trữ + batch (đường A) | Grafana: ô *Dòng trong bronze*, *Tin trong silver*, biểu đồ theo topic có `backfill.vietjobs`. Tab SeaweedFS: mở `warehouse/…/jobs_raw/` → thư mục `data/` theo phân vùng ngày + nguồn, file Parquet; `metadata/` có `*.metadata.json`, manifest | Iceberg = Parquet + metadata trên object storage (L03, L04); phân vùng `days(ingest_ts), source`; job `vietjobs --sink bronze` nạp 48k tin một lần |
 | 4–8 | Streaming (đường B) – mục 3.1 | Terminal B chạy job streaming; tab Spark UI → *Structured Streaming*. Terminal C replay 3.000 tin. Kafka UI: số message của `jobs.raw.vietjobs.v1` tăng, xem một message. Grafana: cột `jobs.raw.vietjobs.v1` mọc lên mỗi 10 giây, *Dòng trong bronze* tăng, *Số file dữ liệu bronze* tăng | Kafka 6 partition, key = `source_job_id` (L08); micro-batch 10 giây, checkpoint offset trên PVC → exactly-once nhờ commit Iceberg (L10, L11). Kafka UI không hiện lag vì Spark giữ offset trong checkpoint, không commit về Kafka |
-| 8–11 | Điều phối (Airflow) – mục 3.2 | Dừng streaming (Ctrl+C ở terminal B). Airflow: đồ thị DAG → **Trigger**; task `silver_job_postings` chuyển xanh, mở log (log Spark), tab Spark UI → *SQL* thấy `MERGE`; `dbt_build_gold` log `PASS`; `iceberg_maintenance` log "số file … → …" | DAG = phụ thuộc + thử lại + lịch chạy mỗi giờ; mỗi task là một pod trong `compute` (thấy trong k9s); dbt test đỏ thì task đỏ |
+| 8–11 | Điều phối (Airflow) – mục 3.2 | `bash scripts/demo-mode.sh airflow` (dừng streaming, bật lại scheduler). Airflow: đồ thị DAG → **Trigger**; task `silver_job_postings` chuyển xanh, mở log (log Spark), tab Spark UI → *SQL* thấy `MERGE`; `dbt_build_gold` log `PASS`; `iceberg_maintenance` log "số file … → …" | DAG = phụ thuộc + thử lại + lịch chạy mỗi giờ; mỗi task là một pod trong `compute` (thấy trong k9s); dbt test đỏ thì task đỏ |
 | 11–13 | Silver + gold | Grafana: *Tin trong silver* **không đổi** dù bronze có thêm 3.000 dòng; *Snapshot của silver* +1; bảng *Sức khỏe bảng Iceberg*: số file bronze giảm sau compaction; ba biểu đồ gold. Tab Trino UI: các truy vấn Grafana vừa gửi | `MERGE INTO` upsert theo `job_uid` (bản replay trùng với bản batch); chuẩn hóa lương, 34 tỉnh sau sắp xếp 2025, kinh nghiệm, cấp bậc; Trino là engine truy vấn, Grafana chỉ hiển thị |
 | 13–15 | Iceberg time travel | Grafana bảng *Lịch sử snapshot*; terminal: truy vấn time travel (mục 3.3) | Mỗi commit là một phiên bản, tái lập số liệu; compaction không làm mất dữ liệu (`so_dong` giữ nguyên) |
 
 ### 3.1. Phần streaming chạy trực tiếp
 
-Terminal B – job streaming (micro-batch 10 giây để thấy rõ trên Grafana):
+Terminal B – job streaming (micro-batch 10 giây để thấy rõ trên Grafana; driver + executor 768 MB cho vừa RAM):
 
 ```bash
-bash deploy/spark/submit.sh bronze_jobs --trigger "10 seconds"
+DRIVER_MEMORY=768m EXECUTOR_MEMORY=768m bash deploy/spark/submit.sh bronze_jobs --trigger "10 seconds"
 ```
 
 Đợi terminal D in `Spark UI http://localhost:4040 …`, mở tab Spark UI → *Structured Streaming*.
 
-Terminal C – replay 3.000 tin VietJobs vào Kafka, 50 tin/giây (~1 phút):
+Terminal C – replay 3.000 tin VietJobs vào Kafka, 50 tin/giây (~1 phút). Đây là "nguồn sự kiện" (đóng vai crawler),
+chạy bằng một pod Python nhỏ, không phải Spark:
 
 ```bash
-bash deploy/spark/submit.sh vietjobs --sink kafka --limit 3000 --rate 50
+bash deploy/data/replay-vietjobs.sh 3000 50
 ```
 
 Xem Grafana (biểu đồ *Tin nạp vào bronze theo 10 giây*) và Kafka UI (*Topics → jobs.raw.vietjobs.v1 → Messages*).
-Replay xong: `Ctrl+C` ở terminal B, rồi `kubectl delete pod -n compute -l spark-role=driver` nếu driver còn chạy.
+Replay xong: `Ctrl+C` ở terminal B (chỉ dừng lệnh submit; driver vẫn chạy trong cụm), rồi chuyển sang phần
+Airflow bằng `bash scripts/demo-mode.sh airflow` – lệnh này dừng hẳn job streaming và bật lại scheduler (~1 phút).
 
 ### 3.2. Phần Airflow
 
@@ -128,7 +142,8 @@ bash scripts/trino.sh -f scripts/demo-queries.sql   # dự phòng nếu Grafana 
 |---|---|
 | Ô Grafana báo *Plugin not found* | Pod Grafana lần đầu cần Internet để tải plugin Trino: `kubectl logs -n monitoring deploy/grafana \| grep -i plugin`; có mạng rồi `kubectl rollout restart -n monitoring deploy/grafana` |
 | Ô Grafana báo *Table … does not exist* | Chưa chạy bước dữ liệu tương ứng (silver hoặc `dbt.sh build`) |
-| Task Airflow đứng ở *queued*/*running* lâu, pod `Pending` | Thiếu RAM: `kubectl describe pod -n compute <pod>`; dừng job streaming hoặc tắt Trino worker tạm thời |
+| Task Airflow đứng ở *queued* lâu | Scheduler đang tắt (chế độ streaming): `bash scripts/demo-mode.sh airflow` |
+| Pod `Pending`, `OOMKilled`, máy chậm | Thiếu RAM: `bash scripts/demo-mode.sh status`; `kubectl describe pod -n <ns> <pod>`; dừng streaming trước khi chạy DAG |
 | Task Airflow lỗi `Forbidden` khi tạo pod | Chạy lại `bash deploy/airflow/install.sh` (áp lại `deploy/airflow/rbac.yaml`) |
 | Kafka UI `ImagePullBackOff` | Kiểm tra mạng; tag image ở `deploy/monitoring/kafka-ui.yaml` |
 | `demo-ui.sh` báo cổng đang dùng | Đóng port-forward cũ: `pkill -f "kubectl port-forward"` |

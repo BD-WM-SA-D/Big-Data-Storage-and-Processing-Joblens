@@ -1,5 +1,6 @@
 # Helm values cho Trino 483 – chart trinodb/trino 1.44.0. Namespace "serving".
-# 1 coordinator + 1 worker, ngân sách ~3 GB RAM (docs/project-plan/03, mục Triển khai).
+# Một node: coordinator kiêm worker (nodeScheduler.includeCoordinator) – máy dev 16 GB RAM không đủ cho
+# coordinator + worker riêng (~3,3 GB). Ngân sách ~1,8 GB. Lên cụm thật thì tăng server.workers.
 # Catalog "iceberg" đọc warehouse "joblens" qua Lakekeeper (Iceberg REST), dữ liệu trên SeaweedFS (S3).
 # Khóa S3 lấy từ Secret "joblens-s3" (install.sh tạo từ .env), không ghi vào file này.
 
@@ -7,23 +8,25 @@ image:
   tag: "483"
 
 server:
-  workers: 1
+  workers: 0
   config:
     query:
       maxMemory: "1GB"
 
 coordinator:
   jvm:
-    maxHeapSize: "1G"
+    maxHeapSize: "1400M"
   config:
+    nodeScheduler:
+      includeCoordinator: true
     query:
-      maxMemoryPerNode: "512MB"
+      maxMemoryPerNode: "600MB"
   resources:
     requests:
       cpu: 250m
-      memory: 1280Mi
-    limits:
       memory: 1536Mi
+    limits:
+      memory: 1792Mi
 
 worker:
   jvm:

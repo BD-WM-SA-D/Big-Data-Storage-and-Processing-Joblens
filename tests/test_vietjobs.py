@@ -103,3 +103,71 @@ def test_to_list():
     assert vietjobs.to_list("[]") == []
     assert vietjobs.to_list("a, b") == ["a", "b"]
     assert vietjobs.to_list(None) == []
+
+
+class FakeProducer:
+    """Thay confluent_kafka.Producer: ghi lại message, gọi callback như Kafka đã nhận."""
+
+    def __init__(self, fail_every: int = 0):
+        self.sent, self.flushes, self.fail_every = [], 0, fail_every
+        self._pending = []
+
+    def produce(self, topic, key, value, on_delivery):
+        self.sent.append((topic, key, value))
+        err = (
+            "broker down"
+            if self.fail_every and len(self.sent) % self.fail_every == 0
+            else None
+        )
+        self._pending.append((on_delivery, err))
+
+    def poll(self, _timeout):
+        return 0
+
+    def flush(self, _timeout):
+        self.flushes += 1
+        for cb, err in self._pending:
+            cb(err, None)
+        self._pending = []
+        return 0
+
+
+def test_replay_to_kafka_keys_batches_and_rate(messages):
+    fake, waits = FakeProducer(), []
+    n = vietjobs.replay_to_kafka(
+        messages, "unused:9092", rate=2.0, batch=2, producer=fake, sleep=waits.append
+    )
+    assert n == len(messages) == 5
+    assert {t for t, _, _ in fake.sent} == {"jobs.raw.vietjobs.v1"}
+    assert [k for _, k, _ in fake.sent] == [
+        m["source_job_id"].encode() for m in messages
+    ]
+    assert fake.flushes == 3  # 2 + 2 + 1
+    assert len(waits) == 2 and all(0 < w <= 1.0 for w in waits)  # đợt cuối không ngủ
+    first = __import__("json").loads(fake.sent[0][2])
+    assert first["schema_version"] == "job_posting.v1" and first["source"] == "vietjobs"
+
+
+def test_replay_to_kafka_fails_loudly_on_delivery_error(messages):
+    with pytest.raises(RuntimeError, match="Kafka từ chối"):
+        vietjobs.replay_to_kafka(
+            messages,
+            "unused:9092",
+            rate=1000,
+            batch=10,
+            producer=FakeProducer(fail_every=3),
+            sleep=lambda _: None,
+        )
+
+
+def test_kafka_sink_does_not_need_spark(monkeypatch):
+    calls = {}
+    monkeypatch.setenv("JOBLENS_KAFKA_BOOTSTRAP", "k:9092")
+    monkeypatch.setattr(
+        vietjobs, "replay_to_kafka", lambda msgs, *a: calls.setdefault("n", len(msgs))
+    )
+    monkeypatch.setitem(
+        sys.modules, "pyspark", None
+    )  # import pyspark sẽ lỗi nếu bị gọi
+    vietjobs.main(["--input", str(SAMPLE), "--sink", "kafka", "--limit", "3"])
+    assert calls["n"] == 3
