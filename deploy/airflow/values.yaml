@@ -1,0 +1,108 @@
+# Helm values cho Apache Airflow 3.3.2 – chart chính thức apache-airflow/airflow 1.22.0. Namespace "orchestration".
+# joblens/versions.md: Airflow 3.3.x, Helm chart chính thức. Chart 1.22.0 mặc định Airflow 3.2.2 nên đặt image tại đây.
+#
+# Môi trường dev một máy: LocalExecutor (task chạy trong pod scheduler, mỗi task lại là một pod trong "compute"
+# nhờ KubernetesPodOperator) – không cần Celery/Redis. Tắt triggerer, statsd. Ngân sách ~2 GB RAM.
+#
+# Bí mật KHÔNG nằm trong file này – install.sh tạo trước các Secret:
+#   airflow-pg        mật khẩu Postgres (deploy/airflow/postgres.yaml)
+#   airflow-metadata  chuỗi kết nối metadata DB (khóa "connection")
+#   airflow-keys      fernet-key, api-secret-key, jwt-secret
+#   airflow-admin     mật khẩu tài khoản admin của giao diện
+# Airflow Variables (tag image cho DAG) do install.sh truyền qua một file values thứ hai (khóa "env"),
+# vì tag đổi theo git commit – quy tắc repo: Variables khai báo qua Helm values, không nhập tay trên giao diện.
+
+defaultAirflowRepository: apache/airflow
+defaultAirflowTag: "3.3.2-python3.12"
+airflowVersion: "3.3.2"
+
+executor: LocalExecutor
+
+# Metadata DB: Postgres riêng (postgres.yaml), không dùng subchart bitnami
+postgresql:
+  enabled: false
+data:
+  metadataSecretName: airflow-metadata
+
+fernetKeySecretName: airflow-keys
+apiSecretKeySecretName: airflow-keys
+jwtSecretName: airflow-keys
+
+# install.sh dùng "helm --wait": job migrate/tạo user không được là hook, nếu không helm chờ pod
+# (đang đợi migrate) còn migrate lại đợi helm xong → treo (giống lỗi Lakekeeper đã gặp).
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+  defaultUser:
+    username: admin
+    email: admin@joblens.local
+    firstName: JobLens
+    lastName: Admin
+    # password: install.sh đặt bằng --set từ Secret airflow-admin
+
+redis:
+  enabled: false
+statsd:
+  enabled: false
+triggerer:
+  enabled: false
+
+# LocalExecutor + persistence → scheduler là StatefulSet, log task nằm trên volume 1 GiB (local-path của k3d)
+workers:
+  celery:
+    persistence:
+      enabled: true
+      size: 1Gi
+
+scheduler:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 768Mi
+    limits:
+      memory: 1536Mi
+
+dagProcessor:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      memory: 768Mi
+
+apiServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+config:
+  core:
+    load_examples: "False"
+    dags_are_paused_at_creation: "True"
+  api:
+    workers: 1
+  scheduler:
+    # DAG đọc từ ConfigMap; quét lại mỗi 30 giây
+    min_file_process_interval: 30
+
+# DAG: ConfigMap "joblens-dags" (install.sh tạo từ airflow/dags/*.py). Gắn từng file bằng subPath để Airflow
+# không thấy thư mục ẩn ..data của ConfigMap (tránh nạp DAG hai lần). Thêm file DAG mới thì thêm một dòng ở đây.
+volumes:
+  - name: joblens-dags
+    configMap:
+      name: joblens-dags
+volumeMounts:
+  - name: joblens-dags
+    mountPath: /opt/airflow/dags/joblens_pipeline.py
+    subPath: joblens_pipeline.py
+    readOnly: true
+  - name: joblens-dags
+    mountPath: /opt/airflow/dags/joblens_spark.py
+    subPath: joblens_spark.py
+    readOnly: true

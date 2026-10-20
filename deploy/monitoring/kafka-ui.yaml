@@ -1,0 +1,62 @@
+# Kafka UI (kafbat/kafka-ui v1.5.0) – xem topic, partition, message và lag của consumer trên trình duyệt.
+# Chế độ chỉ đọc: topic chỉ được tạo/sửa bằng KafkaTopic trong deploy/kafka/topics.yaml (quy tắc repo).
+# Môi trường dev không bật đăng nhập – chỉ mở qua port-forward (scripts/demo-ui.sh).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-ui
+  template:
+    metadata:
+      labels:
+        app: kafka-ui
+    spec:
+      containers:
+        - name: kafka-ui
+          image: ghcr.io/kafbat/kafka-ui:v1.5.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: joblens
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: joblens-kafka-bootstrap.ingest.svc.cluster.local:9092
+            - name: KAFKA_CLUSTERS_0_READONLY
+              value: "true"
+            - name: DYNAMIC_CONFIG_ENABLED
+              value: "false"
+            - name: AUTH_TYPE
+              value: DISABLED
+            - name: MANAGEMENT_HEALTH_LDAP_ENABLED
+              value: "false"
+            - name: JAVA_OPTS
+              value: "-Xmx256m"
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+  namespace: monitoring
+spec:
+  selector:
+    app: kafka-ui
+  ports:
+    - name: http
+      port: 8080

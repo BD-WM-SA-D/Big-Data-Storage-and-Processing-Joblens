@@ -1,0 +1,6 @@
+# Context build image dbt (dbt/Dockerfile): bỏ thư mục sinh ra khi chạy dbt trên máy
+target/
+logs/
+dbt_packages/
+.user.yml
+Dockerfile

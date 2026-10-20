@@ -1,0 +1,35 @@
+# Quyền cho Airflow tạo pod task trong namespace "compute" (KubernetesPodOperator của DAG joblens_pipeline).
+# Executor là LocalExecutor nên task chạy trong pod scheduler → cấp quyền cho ServiceAccount airflow-scheduler.
+# Pod Spark driver do task tạo ra dùng ServiceAccount "spark" (deploy/spark/rbac.yaml) để tạo pod executor.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-pod-launcher
+  namespace: compute
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "get", "list", "watch", "delete", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-pod-launcher
+  namespace: compute
+subjects:
+  - kind: ServiceAccount
+    name: airflow-scheduler
+    namespace: orchestration
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: airflow-pod-launcher

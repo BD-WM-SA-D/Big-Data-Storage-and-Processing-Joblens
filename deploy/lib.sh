@@ -27,3 +27,23 @@ s3_secret() {
     --from-literal=AWS_REGION="$JOBLENS_S3_REGION" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 }
+
+# image_tag NAME VERSION PATH... – tag dạng NAME:VERSION-gitsha (thêm -dirty nếu PATH có thay đổi chưa commit).
+image_tag() {
+  local name="$1" version="$2"; shift 2
+  echo "${name}:${version}-$(git -C "$REPO_ROOT" rev-parse --short HEAD)$(git -C "$REPO_ROOT" diff --quiet HEAD -- "$@" || echo -dirty)"
+}
+
+# build_import TAG DOCKERFILE CONTEXT – build image rồi nạp vào cụm k3d "joblens" (không cần registry).
+build_import() {
+  echo "==> Build image $1"
+  docker build -q -t "$1" -f "$2" "$3"
+  k3d image import "$1" -c joblens
+}
+
+# spark_image – build + nạp image Spark job, in tag ra stdout (log build ra stderr).
+spark_image() {
+  local tag; tag="$(image_tag joblens/spark-jobs 0.1.0 spark-jobs dbt/seeds)"
+  build_import "$tag" "${REPO_ROOT}/spark-jobs/Dockerfile" "$REPO_ROOT" >&2
+  echo "$tag"
+}

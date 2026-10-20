@@ -1,0 +1,70 @@
+# Postgres 17.6 làm metadata DB cho Airflow (namespace "orchestration").
+# Không dùng subchart postgresql của chart Airflow (image bitnamilegacy, Postgres 16.1) – tự khai báo một
+# StatefulSet nhỏ, cùng bản Postgres với Lakekeeper (deploy/storage/lakekeeper-values.yaml).
+# Mật khẩu nằm trong Secret "airflow-pg" do install.sh sinh một lần, không ghi vào file này.
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-postgres
+  namespace: orchestration
+spec:
+  selector:
+    app: airflow-postgres
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: airflow-postgres
+  namespace: orchestration
+spec:
+  serviceName: airflow-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: airflow-postgres
+  template:
+    metadata:
+      labels:
+        app: airflow-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17.6
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: airflow
+            - name: POSTGRES_DB
+              value: airflow
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: airflow-pg
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "airflow", "-d", "airflow"]
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

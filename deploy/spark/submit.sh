@@ -14,9 +14,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 JOB="${1:?Thiếu tên job, ví dụ: bronze_jobs}"; shift
 NS=compute
-CLUSTER=joblens
-VERSION=0.1.0
-TAG="joblens/spark-jobs:${VERSION}-$(git -C "$REPO_ROOT" rev-parse --short HEAD)$(git -C "$REPO_ROOT" diff --quiet HEAD -- spark-jobs dbt/seeds || echo -dirty)"
 SPARK_SUBMIT="${REPO_ROOT}/.venv/bin/spark-submit"
 SPARK_HOME="$("${REPO_ROOT}/.venv/bin/python" -c "import os, pyspark; print(os.path.dirname(pyspark.__file__))")"; export SPARK_HOME
 [ -x "$SPARK_SUBMIT" ] || { echo "Không thấy $SPARK_SUBMIT – chạy 'uv sync' ở gốc repo"; exit 1; }
@@ -26,9 +23,7 @@ load_env
 kubectl apply -f "${HERE}/rbac.yaml" >/dev/null
 s3_secret "$NS"
 
-echo "==> Build image ${TAG}"
-docker build -q -t "$TAG" -f "${REPO_ROOT}/spark-jobs/Dockerfile" "$REPO_ROOT"
-k3d image import "$TAG" -c "$CLUSTER"
+TAG="$(spark_image)"
 
 # Địa chỉ dịch vụ trong cụm (DNS đầy đủ vì driver chạy ở namespace compute)
 KAFKA=joblens-kafka-bootstrap.ingest.svc.cluster.local:9092
