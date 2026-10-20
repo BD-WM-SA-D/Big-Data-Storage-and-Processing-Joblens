@@ -146,6 +146,8 @@ bash scripts/trino.sh -f scripts/demo-queries.sql   # dự phòng nếu Grafana 
 | Pod `Pending`, `OOMKilled`, máy chậm | Thiếu RAM: `bash scripts/demo-mode.sh status`; `kubectl describe pod -n <ns> <pod>`; dừng streaming trước khi chạy DAG |
 | Task Airflow lỗi `Forbidden` khi tạo pod | Chạy lại `bash deploy/airflow/install.sh` (áp lại `deploy/airflow/rbac.yaml`) |
 | Kafka UI `ImagePullBackOff` | Kiểm tra mạng; tag image ở `deploy/monitoring/kafka-ui.yaml` |
+| Sau `wsl --shutdown` hoặc khởi động lại máy: `kubectl` báo *connection reset by peer* | Node k3d đổi IP, load balancer còn trỏ IP cũ: `k3d cluster stop joblens && k3d cluster start joblens`, đợi 1 phút rồi `kubectl get nodes` |
+| Biểu đồ *Tin nạp vào bronze theo 10 giây* trống dù bronze tăng | Kiểm tra khoảng thời gian Grafana (Last 15/30 minutes); xem SQL thật bằng *Inspect → Query* trên ô đó |
 | `demo-ui.sh` báo cổng đang dùng | Đóng port-forward cũ: `pkill -f "kubectl port-forward"` |
 | Sửa DAG nhưng Airflow vẫn chạy bản cũ | Chạy lại `bash deploy/airflow/install.sh` (cập nhật ConfigMap, image, khởi động lại scheduler) |
 

@@ -9,7 +9,7 @@
   "editable": true,
   "refresh": "5s",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "time": {
     "from": "now-30m",
     "to": "now"
@@ -345,7 +345,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Tin nạp vào bronze theo 10 giây (theo topic)",
-      "description": "jobs.raw.*.v1 = đường streaming (Kafka → Spark), backfill.vietjobs = đường batch",
+      "description": "jobs.raw.*.v1 = đường streaming (Kafka → Spark), backfill.vietjobs = đường batch. Lọc theo epoch giây nên không phụ thuộc múi giờ phiên Trino.",
       "datasource": {
         "type": "trino-datasource",
         "uid": "trino"
@@ -363,7 +363,7 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT $__timeGroup(ingest_ts, '10s') AS time, kafka_topic AS metric, count(*) AS value\nFROM iceberg.bronze.jobs_raw\nWHERE $__timeFilter(ingest_ts)\nGROUP BY 1, 2\nORDER BY 1",
+          "rawSQL": "SELECT $__timeGroup(ingest_ts, '10s') AS time, kafka_topic AS metric, count(*) AS value\nFROM (SELECT ingest_ts, kafka_topic, to_unixtime(ingest_ts) AS ingest_epoch FROM iceberg.bronze.jobs_raw)\nWHERE $__unixEpochFilter(ingest_epoch)\nGROUP BY 1, 2\nORDER BY 1",
           "format": 0
         }
       ],
