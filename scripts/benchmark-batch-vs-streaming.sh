@@ -6,6 +6,7 @@
 #
 # Chỉ số (mỗi đường):
 #   độ trễ đầu-cuối  = thời điểm file Parquet chứa dòng được ghi ("$file_modified_time") − crawl_ts của dòng
+#                      (crawl_ts trong bronze là TIMESTAMP, Spark đã parse từ chuỗi ISO của message)
 #                      (A: crawl_ts = lúc job bắt đầu; B: crawl_ts = lúc producer gửi, độ chính xác ms)
 #   thông lượng      = số dòng / (file cuối − sự kiện đầu)
 #   số file          = số file Parquet mới chứa dữ liệu của lần chạy (file nhỏ → cần compaction)
@@ -99,7 +100,7 @@ echo "B0=${B0}" >> "${OUT}/state"
 bash "${ROOT}/deploy/data/replay-vietjobs.sh" "$N" "$RATE" 2>&1 | tee "${OUT}/B.replay.log" \
   | { grep --line-buffered -E "==>|đã gửi .*/|lỗi|Error" || true; }
 echo "    đợi bronze nhận đủ ${N} dòng (tối đa 10 phút)"
-B_WHERE="kafka_topic = 'jobs.raw.vietjobs.v1' AND from_iso8601_timestamp(crawl_ts) >= from_iso8601_timestamp('${B0}')"
+B_WHERE="kafka_topic = 'jobs.raw.vietjobs.v1' AND crawl_ts >= from_iso8601_timestamp('${B0}')"
 for _ in $(seq 1 60); do
   got=$(q "SELECT count(*) FROM iceberg.bronze.jobs_raw WHERE ${B_WHERE}" || echo 0)
   echo "    bronze đã có ${got:-0}/${N} dòng"
@@ -113,13 +114,13 @@ read -r _ B_IDLE_GBH B_IDLE_PEAK < <(cost "${OUT}/B.idle.samples")
 stop_spark_job bronze-jobs
 
 # ---------------------------------------------------------------- số đo trên dữ liệu
-A_WHERE="kafka_topic = 'backfill.vietjobs' AND from_iso8601_timestamp(crawl_ts) >= from_iso8601_timestamp('${A0}')"
+A_WHERE="kafka_topic = 'backfill.vietjobs' AND crawl_ts >= from_iso8601_timestamp('${A0}')"
 metrics() {  # metrics WHERE → rows,ids,files,p50_s,p95_s,max_s,throughput
   q "SELECT count(*), count(DISTINCT source_job_id), count(DISTINCT \"\$path\"),
-       round(approx_percentile(date_diff('millisecond', from_iso8601_timestamp(crawl_ts), \"\$file_modified_time\"), 0.5) / 1e3, 1),
-       round(approx_percentile(date_diff('millisecond', from_iso8601_timestamp(crawl_ts), \"\$file_modified_time\"), 0.95) / 1e3, 1),
-       round(max(date_diff('millisecond', from_iso8601_timestamp(crawl_ts), \"\$file_modified_time\")) / 1e3, 1),
-       round(count(*) / greatest(date_diff('millisecond', min(from_iso8601_timestamp(crawl_ts)), max(\"\$file_modified_time\")) / 1e3, 0.001), 1)
+       round(approx_percentile(date_diff('millisecond', crawl_ts, \"\$file_modified_time\"), 0.5) / 1e3, 1),
+       round(approx_percentile(date_diff('millisecond', crawl_ts, \"\$file_modified_time\"), 0.95) / 1e3, 1),
+       round(max(date_diff('millisecond', crawl_ts, \"\$file_modified_time\")) / 1e3, 1),
+       round(count(*) / greatest(date_diff('millisecond', min(crawl_ts), max(\"\$file_modified_time\")) / 1e3, 0.001), 1)
      FROM iceberg.bronze.jobs_raw WHERE $1"
 }
 IFS=, read -r A_ROWS A_IDS A_FILES A_P50 A_P95 A_MAX A_TPUT < <(metrics "$A_WHERE")
