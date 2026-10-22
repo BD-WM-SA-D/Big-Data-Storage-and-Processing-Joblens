@@ -15,6 +15,7 @@
 #
 # Chạy (Airflow phải tạm dừng để task bảo trì không gộp file giữa chừng – script tự làm):
 #   bash scripts/benchmark-batch-vs-streaming.sh [N=5000] [RATE=100] [TRIGGER="10 seconds"]
+#   REUSE_A=/tmp/joblens-bench-XXXX bash scripts/…   # dùng lại phần batch của lần chạy trước (cùng N)
 # Kết quả in ra cuối (bảng Markdown) và lưu ở thư mục tạm; chép dòng số liệu vào benchmarks/batch_vs_streaming.md
 # cùng thông tin máy, rồi thêm một dòng vào deploy/compat.md. Không sửa tay số đo.
 set -Eeuo pipefail
@@ -34,17 +35,23 @@ q() { TRINO_FORMAT=CSV_UNQUOTED bash "${ROOT}/scripts/trino.sh" "$1" | tail -1; 
 now_iso() { date -u +%Y-%m-%dT%H:%M:%S.%3NZ; }
 
 start_sampler() {  # start_sampler REGEX FILE – ghi "epoch pod cpu_m mem_Mi" mỗi 5 giây
-  ( while true; do
+  # set +e: metrics-server chưa sẵn sàng thì "kubectl top" lỗi – bỏ qua mẫu đó, không để vòng lấy mẫu chết
+  ( set +e +o pipefail; trap - ERR
+    while true; do
       kubectl top pods -n compute --no-headers 2>/dev/null \
         | awk -v t="$(date +%s)" -v re="$1" '$1 ~ re {gsub("m","",$2); gsub("Mi","",$3); print t, $1, $2, $3}' >> "$2"
       sleep 5
     done ) &
   SAMPLER=$!
 }
-stop_sampler() { [ -n "$SAMPLER" ] && kill "$SAMPLER" 2>/dev/null; SAMPLER=""; }
+stop_sampler() {
+  if [ -n "$SAMPLER" ]; then kill "$SAMPLER" 2>/dev/null || true; fi
+  SAMPLER=""
+}
 cost() {  # cost FILE → "cpu_s gb_h peak_mem_mi" (mỗi mẫu đại diện 5 giây)
-  awk '{cpu+=$3*5/1000; mem+=$4*5/3600/1024; t[$1]+=$4} END {for (k in t) if (t[k]>p) p=t[k];
-       printf "%.0f %.4f %.0f\n", cpu, mem, p}' "${1}" 2>/dev/null || echo "0 0 0"
+  # không có mẫu nào (metrics-server lỗi suốt lúc chạy) → "–", không ghi 0 giả
+  awk '{cpu+=$3*5/1000; mem+=$4*5/3600/1024; t[$1]+=$4} END {if (NR==0) {print "– – –"; exit}
+       for (k in t) if (t[k]>p) p=t[k]; printf "%.0f %.4f %.0f\n", cpu, mem, p}' "${1}" 2>/dev/null || echo "– – –"
 }
 cleanup() { stop_sampler; stop_spark_job bronze-jobs >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -55,6 +62,14 @@ stop_spark_job bronze-jobs
 echo "    N=${N}, RATE=${RATE} tin/giây, TRIGGER=${TRIGGER}, profile=${PROFILE}, kết quả: ${OUT}"
 
 # ---------------------------------------------------------------- A: batch
+if [ -n "${REUSE_A:-}" ]; then
+  # dùng lại phần A của một lần chạy trước (cùng N) – tránh chạy lại job batch ~8 phút
+  # shellcheck disable=SC1091
+  . "${REUSE_A}/state"
+  cp "${REUSE_A}/A.samples" "${OUT}/A.samples" 2>/dev/null || : > "${OUT}/A.samples"
+  echo "A0=${A0} A_WALL=${A_WALL}" >> "${OUT}/state"
+  echo "==> A – dùng lại lần chạy ${REUSE_A} (A0=${A0}, ${A_WALL} giây)"
+else
 echo "==> A – batch: vietjobs --sink bronze --limit ${N}"
 A0=$(now_iso)
 start_sampler '^vietjobs-[0-9]' "${OUT}/A.samples"
@@ -66,6 +81,7 @@ A_WALL=$SECONDS
 echo "    A xong sau ${A_WALL} giây"
 echo "A0=${A0} A_WALL=${A_WALL}" >> "${OUT}/state"
 stop_sampler
+fi
 read -r A_CPU A_GBH A_PEAK < <(cost "${OUT}/A.samples")
 
 # ---------------------------------------------------------------- B: streaming
