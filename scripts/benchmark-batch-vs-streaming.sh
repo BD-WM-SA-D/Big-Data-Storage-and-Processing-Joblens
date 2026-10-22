@@ -17,7 +17,9 @@
 #   bash scripts/benchmark-batch-vs-streaming.sh [N=5000] [RATE=100] [TRIGGER="10 seconds"]
 # Kết quả in ra cuối (bảng Markdown) và lưu ở thư mục tạm; chép dòng số liệu vào benchmarks/batch_vs_streaming.md
 # cùng thông tin máy, rồi thêm một dòng vào deploy/compat.md. Không sửa tay số đo.
-set -euo pipefail
+set -Eeuo pipefail
+# dừng giữa chừng thì in rõ dòng và lệnh hỏng (trước đây script thoát im lặng)
+trap 'echo "!! Dừng ở dòng $LINENO: $BASH_COMMAND (mã $?) – log ở ${OUT:-?}" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=deploy/lib.sh
 . "${ROOT}/deploy/lib.sh"
@@ -57,8 +59,12 @@ echo "==> A – batch: vietjobs --sink bronze --limit ${N}"
 A0=$(now_iso)
 start_sampler '^vietjobs-[0-9]' "${OUT}/A.samples"
 SECONDS=0
-bash "${ROOT}/deploy/spark/submit.sh" vietjobs --sink bronze --limit "$N" > "${OUT}/A.log" 2>&1
+# in log ra màn hình (lọc dòng quan trọng) để thấy job đang chạy; log đầy đủ ở A.log
+bash "${ROOT}/deploy/spark/submit.sh" vietjobs --sink bronze --limit "$N" 2>&1 | tee "${OUT}/A.log" \
+  | { grep --line-buffered -E "==>|phase: |đọc .* tin|đã ghi|Exception|Error" || true; }
 A_WALL=$SECONDS
+echo "    A xong sau ${A_WALL} giây"
+echo "A0=${A0} A_WALL=${A_WALL}" >> "${OUT}/state"
 stop_sampler
 read -r A_CPU A_GBH A_PEAK < <(cost "${OUT}/A.samples")
 
@@ -73,11 +79,14 @@ sleep 45
 B0=$(now_iso)
 start_sampler '^bronze-jobs-' "${OUT}/B.samples"
 echo "==> B – replay ${N} tin, ${RATE} tin/giây"
-bash "${ROOT}/deploy/data/replay-vietjobs.sh" "$N" "$RATE" > "${OUT}/B.replay.log" 2>&1
+echo "B0=${B0}" >> "${OUT}/state"
+bash "${ROOT}/deploy/data/replay-vietjobs.sh" "$N" "$RATE" 2>&1 | tee "${OUT}/B.replay.log" \
+  | { grep --line-buffered -E "==>|đã gửi .*/|lỗi|Error" || true; }
 echo "    đợi bronze nhận đủ ${N} dòng (tối đa 10 phút)"
 B_WHERE="kafka_topic = 'jobs.raw.vietjobs.v1' AND from_iso8601_timestamp(crawl_ts) >= from_iso8601_timestamp('${B0}')"
 for _ in $(seq 1 60); do
-  got=$(q "SELECT count(*) FROM iceberg.bronze.jobs_raw WHERE ${B_WHERE}")
+  got=$(q "SELECT count(*) FROM iceberg.bronze.jobs_raw WHERE ${B_WHERE}" || echo 0)
+  echo "    bronze đã có ${got:-0}/${N} dòng"
   [ "${got:-0}" -ge "$N" ] && break; sleep 10
 done
 stop_sampler
