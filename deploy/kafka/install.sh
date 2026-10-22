@@ -5,6 +5,8 @@ set -euo pipefail
 
 STRIMZI_VERSION=1.2.0   # pin theo joblens/versions.md – không dùng "latest"
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=deploy/lib.sh
+. "${HERE}/../lib.sh"
 
 kubectl create namespace ingest --dry-run=client -o yaml | kubectl apply -f -
 
@@ -15,6 +17,10 @@ helm upgrade --install strimzi \
 
 echo "==> Cụm Kafka 'joblens' (KRaft, 1 node)"
 kubectl apply -f "${HERE}/kafka-cluster.yaml"
+if [ "$PROFILE" = lite ]; then
+  echo "    (lite: heap Kafka 256 MB)"
+  kubectl patch kafkanodepool dual-role -n ingest --type merge --patch-file "${HERE}/kafka-lite-patch.yaml"
+fi
 kubectl wait kafka/joblens -n ingest --for=condition=Ready --timeout=600s
 
 echo "==> Topic"

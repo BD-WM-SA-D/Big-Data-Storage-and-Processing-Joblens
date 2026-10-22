@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -171,3 +172,29 @@ def test_kafka_sink_does_not_need_spark(monkeypatch):
     )  # import pyspark sẽ lỗi nếu bị gọi
     vietjobs.main(["--input", str(SAMPLE), "--sink", "kafka", "--limit", "3"])
     assert calls["n"] == 3
+
+
+def test_replay_sets_event_time_per_message(messages):
+    fake, stamps = (
+        FakeProducer(),
+        iter(f"2026-10-22T10:00:0{i}.000Z" for i in range(10)),
+    )
+    vietjobs.replay_to_kafka(
+        messages,
+        "x",
+        rate=1e6,
+        batch=2,
+        producer=fake,
+        sleep=lambda _: None,
+        now_iso=lambda: next(stamps),
+    )
+    sent = [json.loads(v) for _, _, v in fake.sent]
+    assert [m["crawl_ts"] for m in sent] == [
+        f"2026-10-22T10:00:0{i}.000Z" for i in range(5)
+    ]
+    assert [m["content_hash"] for m in sent] == [
+        m["content_hash"] for m in messages
+    ]  # hash không đổi
+    assert messages[0]["crawl_ts"] == TS  # không sửa list gốc
+    jsonschema = pytest.importorskip("jsonschema")
+    jsonschema.Draft202012Validator(load_schema("job_posting.v1")).validate(sent[0])

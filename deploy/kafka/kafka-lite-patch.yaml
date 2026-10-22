@@ -1,0 +1,13 @@
+# Bản vá cho JOBLENS_PROFILE=lite (máy 8 GB) – install.sh áp sau kafka-cluster.yaml:
+#   kubectl patch kafkanodepool dual-role -n ingest --type merge --patch-file kafka-lite-patch.yaml
+# Heap 256 MB đủ cho tải dev (vài nghìn tin/phút, 8 topic). Không dùng cho đo hiệu năng.
+spec:
+  jvmOptions:
+    -Xms: 256m
+    -Xmx: 256m
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 100m
+    limits:
+      memory: 768Mi

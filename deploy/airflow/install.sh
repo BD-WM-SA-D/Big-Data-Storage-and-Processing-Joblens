@@ -59,6 +59,8 @@ env:
     value: "${SPARK_IMAGE}"
   - name: AIRFLOW_VAR_JOBLENS_DBT_IMAGE
     value: "${DBT_IMAGE}"
+  - name: AIRFLOW_VAR_JOBLENS_SPARK_EXECUTORS
+    value: "$([ "$PROFILE" = lite ] && echo 0 || echo 1)"
 EOF
 
 echo "==> Airflow (chart ${AIRFLOW_CHART_VERSION})"
@@ -66,8 +68,9 @@ helm repo add apache-airflow https://airflow.apache.org >/dev/null 2>&1 || true
 helm repo update apache-airflow >/dev/null
 # Job không phải hook thì không sửa tại chỗ được (spec bất biến) → xóa bản cũ, helm tạo lại (migrate chạy lại vẫn an toàn)
 kubectl delete job -n "$NS" airflow-run-airflow-migrations airflow-create-user --ignore-not-found >/dev/null
+# shellcheck disable=SC2046  # profile_values cố ý tách thành hai đối số (-f FILE)
 helm upgrade --install airflow apache-airflow/airflow --version "$AIRFLOW_CHART_VERSION" -n "$NS" \
-  -f "${HERE}/values.yaml" -f "$VARS" \
+  -f "${HERE}/values.yaml" $(profile_values "$HERE") -f "$VARS" \
   --set-string createUserJob.defaultUser.password="$(secret_val airflow-admin password)" \
   --wait --timeout 15m
 # subPath không tự cập nhật khi ConfigMap đổi → khởi động lại các thành phần đọc DAG

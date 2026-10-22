@@ -2,12 +2,14 @@
 ### joblens_pipeline – điều phối tầng batch của nền tảng JobLens (IT4931)
 
 ```
-silver_job_postings ──┬──> dbt_build_gold        (Trino: seed + gold + kiểm thử dữ liệu)
-                      └──> iceberg_maintenance   (compaction + dọn snapshot)
+silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold        (Trino: seed + gold + kiểm thử dữ liệu)
+                                            └──> iceberg_maintenance   (compaction + dọn snapshot)
 ```
 
 - **silver_job_postings** – Spark đọc phần bronze mới (mốc `joblens.bronze_watermark`), chuẩn hóa, `MERGE INTO`
   `silver.job_postings` và ghi ảnh chụp ngày vào `silver.job_postings_snapshot`.
+- **gx_validate_silver** – Great Expectations kiểm tra silver (khóa, danh mục, khoảng lương, mã tỉnh, độ phủ);
+  có kỳ vọng hỏng thì task đỏ và hai task sau không chạy – gold giữ bản cũ, không bị ghi đè bằng dữ liệu sai.
 - **dbt_build_gold** – `dbt build` trên Trino: `gold.dim_location`, `gold.mart_salary_role_region` và test dữ liệu;
   test lỗi thì task đỏ, dữ liệu gold sai không được coi là xong.
 - **iceberg_maintenance** – gộp file nhỏ do streaming sinh ra, gộp manifest, xóa snapshot cũ (giữ 10 bản gần nhất).
@@ -29,6 +31,8 @@ import joblens_spark as js
 
 SPARK_IMAGE = "{{ var.value.joblens_spark_image }}"
 DBT_IMAGE = "{{ var.value.joblens_dbt_image }}"
+# 0 = Spark local mode trong pod task (máy 8 GB, JOBLENS_PROFILE=lite); mặc định 1 executor
+SPARK_EXECUTORS = "{{ var.value.get('joblens_spark_executors', '1') }}"
 
 
 def _field_env(name: str, path: str) -> k8s.V1EnvVar:
@@ -57,6 +61,7 @@ def spark_task(
             _field_env("POD_IP", "status.podIP"),
             _field_env("POD_NAME", "metadata.name"),
             k8s.V1EnvVar(name="JOBLENS_SPARK_IMAGE", value=SPARK_IMAGE),
+            k8s.V1EnvVar(name="JOBLENS_SPARK_EXECUTORS", value=SPARK_EXECUTORS),
             *(k8s.V1EnvVar(name=k, value=v) for k, v in js.CLUSTER_ENV.items()),
         ],
         env_from=[
@@ -104,6 +109,9 @@ with DAG(
         startup_timeout_seconds=300,
     )
 
+    quality = spark_task("gx_validate_silver", "gx_silver")
+
     maintenance = spark_task("iceberg_maintenance", "maintenance_iceberg")
 
-    silver >> [gold, maintenance]
+    # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt nhẹ, chạy song song với bảo trì)
+    silver >> quality >> [gold, maintenance]

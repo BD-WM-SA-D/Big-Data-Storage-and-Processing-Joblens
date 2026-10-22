@@ -44,14 +44,41 @@ def test_spark_submit_quotes_job_args_and_rejects_bad_job():
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="cần bash")
 def test_spark_submit_script_is_valid_bash():
-    s = js.spark_submit_script("silver_job_postings", ["--full"], executors=2)
+    s = js.spark_submit_script("silver_job_postings", ["--full"])
     subprocess.run(["bash", "-n", "-c", s], check=True)
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="cần bash")
+@pytest.mark.parametrize("executors,expect", [("0", "local[2]"), ("2", "k8s://")])
+def test_executors_variable_picks_local_or_k8s(tmp_path, executors, expect):
+    # thay spark-submit bằng script in tham số để xem nhánh nào được chạy
+    fake = tmp_path / "spark-submit"
+    fake.write_text('#!/usr/bin/env bash\nprintf "%s\\n" "$@"\n')
+    fake.chmod(0o755)
+    s = js.spark_submit_script("silver_job_postings", ["--full"]).replace(
+        js.SPARK_SUBMIT, str(fake)
+    )
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "JOBLENS_SPARK_EXECUTORS": executors,
+        "POD_IP": "10.0.0.1",
+        "POD_NAME": "p",
+        "JOBLENS_SPARK_IMAGE": "img",
+        "JOBLENS_S3_REGION": "us-east-1",
+        **js.CLUSTER_ENV,
+    }
+    out = subprocess.run(
+        ["bash", "-c", s], env=env, capture_output=True, text=True, check=True
+    ).stdout
+    assert expect in out and out.rstrip().endswith("--full")
+    if executors != "0":
+        assert "spark.executor.instances=2" in out
 
 
 def test_dag_jobs_exist_in_spark_image():
     src = (DAGS / "joblens_pipeline.py").read_text(encoding="utf-8")
     jobs = re.findall(r'spark_task\(\s*"[a-z_]+",\s*"([a-z_]+)"', src)
-    assert set(jobs) == {"silver_job_postings", "maintenance_iceberg"}
+    assert set(jobs) == {"silver_job_postings", "gx_silver", "maintenance_iceberg"}
     for job in jobs:
         assert (ROOT / "spark-jobs" / f"{job}.py").exists()
 
@@ -74,6 +101,9 @@ def test_dag_parses_with_airflow():
     assert bag.import_errors == {}
     dag = bag.dags["joblens_pipeline"]
     assert dag.task_dict["silver_job_postings"].downstream_task_ids == {
+        "gx_validate_silver"
+    }
+    assert dag.task_dict["gx_validate_silver"].downstream_task_ids == {
         "dbt_build_gold",
         "iceberg_maintenance",
     }

@@ -4,6 +4,8 @@
 #   bash scripts/demo-mode.sh airflow     # dừng job streaming bronze_jobs, bật lại Airflow để trigger DAG
 #   bash scripts/demo-mode.sh status      # RAM từng node và 12 pod dùng nhiều RAM nhất
 set -euo pipefail
+# shellcheck source=deploy/lib.sh
+. "$(cd "$(dirname "$0")/.." && pwd)/deploy/lib.sh"
 NS_AF=orchestration
 
 status() {
@@ -29,10 +31,7 @@ case "${1:-status}" in
     ;;
   airflow)
     echo "==> Dừng job streaming (pod driver bronze_jobs và executor của nó)"
-    for app in $(kubectl get pod -n compute -l spark-role=driver -o jsonpath='{range .items[*]}{.metadata.labels.spark-app-selector}{"\n"}{end}' 2>/dev/null); do
-      name=$(kubectl get pod -n compute -l "spark-app-selector=${app},spark-role=driver" -o jsonpath='{.items[0].metadata.name}')
-      case "$name" in bronze-jobs-*) kubectl delete pod -n compute -l "spark-app-selector=${app}" --wait=false >/dev/null; echo "   đã dừng $name";; esac
-    done
+    stop_spark_job bronze-jobs
     echo "==> Bật lại Airflow"
     airflow_scale 1
     kubectl rollout status statefulset/airflow-scheduler -n "$NS_AF" --timeout=5m 2>/dev/null \

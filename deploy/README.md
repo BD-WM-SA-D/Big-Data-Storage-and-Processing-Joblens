@@ -4,6 +4,7 @@ Thứ tự cài cho môi trường dev (một máy, cụm k3d `joblens` 1 server
 
 | Bước | Lệnh | Namespace | Cài gì |
 |---|---|---|---|
+| −1 | `bash deploy/k3d/create-cluster.sh` (máy 8 GB: `JOBLENS_PROFILE=lite …`) | – | Cụm k3d `joblens` (chỉ khi chưa có cụm) |
 | 0 | `cp .env.example .env && uv sync` | – | Biến môi trường, Python + pyspark (để chạy `spark-submit`) |
 | 1 | `bash deploy/kafka/install.sh` | `ingest` | Strimzi 1.2.0, Kafka 4.3.1 KRaft 1 node, 7 topic (`deploy/kafka/topics.yaml`) |
 | 2 | `bash deploy/storage/install.sh` | `lakehouse` | SeaweedFS 4.48 (S3, bucket `joblens`), Lakekeeper v0.13.3 + Postgres 17.6, warehouse `joblens` |
@@ -15,7 +16,7 @@ Thứ tự cài cho môi trường dev (một máy, cụm k3d `joblens` 1 server
 | 7 | `bash deploy/spark/submit.sh silver_job_postings` | `compute` | `bronze.jobs_raw` → `silver.job_postings` (MERGE) + `silver.job_postings_snapshot` |
 | 8 | `bash scripts/dbt.sh build` | `serving` (Trino) | Seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 12 test dữ liệu |
 | 9 | `bash deploy/monitoring/install.sh` | `monitoring` | Grafana 13.2.4 + plugin Trino 1.4.1 + dashboard `dashboards/joblens-demo.json`; Kafka UI v1.5.0 (chỉ đọc) |
-| 10 | `bash deploy/airflow/install.sh` | `orchestration` | Postgres 17.6 + Airflow 3.3.2 (chart 1.22.0, LocalExecutor), DAG `joblens_pipeline`: silver → dbt gold + bảo trì Iceberg; build image `joblens/dbt` |
+| 10 | `bash deploy/airflow/install.sh` | `orchestration` | Postgres 17.6 + Airflow 3.3.2 (chart 1.22.0, LocalExecutor), DAG `joblens_pipeline`: silver → GX → dbt gold + bảo trì Iceberg; build image `joblens/dbt` |
 
 Kịch bản demo môn học: [`docs/demo.md`](../docs/demo.md). Mở mọi giao diện web: `bash scripts/demo-ui.sh`. Truy vấn nhanh: `bash scripts/trino.sh "SELECT …"`.
 
@@ -50,6 +51,7 @@ Từ máy mình: `bash scripts/demo-ui.sh` mở cùng lúc Grafana (3000), Kafka
 - Warehouse tắt STS và remote signing: Spark và Trino dùng khóa S3 tĩnh từ Secret. Bật STS khi cần cấp quyền theo bảng.
 - Spark chạy bằng `spark-submit --master k8s://` (cluster mode), image `joblens/spark-jobs:<version>-<gitsha>` build từ `spark-jobs/Dockerfile` và nạp vào k3d bằng `k3d image import` – không cần registry.
 - Airflow chạy LocalExecutor; mỗi task của DAG là một pod trong `compute` (KubernetesPodOperator). Task Spark chạy client mode – pod task là driver, tạo pod executor bằng SA `spark` – nên log Spark hiện thẳng trên Airflow. DAG nạp từ ConfigMap `joblens-dags`; tag image là Airflow Variable `joblens_spark_image`, `joblens_dbt_image` khai báo qua Helm values (`deploy/airflow/install.sh`).
+- `spark-jobs/gx_silver.py` (task `gx_validate_silver`): Great Expectations 1.23 trên Spark – khóa, danh mục, khoảng lương, 34 mã tỉnh, độ phủ địa điểm ≥ 90%, lương ≥ 50%. Hỏng thì dbt không chạy (gold giữ bản cũ). Kết quả JSON ở `s3://joblens/quality/gx/silver_job_postings/`.
 - `spark-jobs/maintenance_iceberg.py` (task `iceberg_maintenance`): `rewrite_data_files` gộp file nhỏ do streaming, `rewrite_manifests`, `expire_snapshots` (giữ 10 snapshot gần nhất). Không chạy `remove_orphan_files` khi streaming đang ghi.
 - Checkpoint của job streaming nằm trên PVC `compute/spark-checkpoints`. Xóa PVC thì job đọc lại Kafka từ đầu (bronze sẽ có bản ghi lặp).
 
@@ -59,9 +61,36 @@ Từ máy mình: `bash scripts/demo-ui.sh` mở cùng lúc Grafana (3000), Kafka
 k3d cluster delete joblens && k3d cluster create joblens --servers 1 --agents 2
 ```
 
-## Máy dev 16 GB RAM
+## Chọn cấu hình theo RAM máy
 
-Cấu hình đã thu nhỏ: Trino một node (~1,8 GB), Kafka heap 512 MB và chỉ có topic operator, Airflow LocalExecutor
-(~1,5 GB), Kafka UI heap 192 MB, replay Kafka bằng producer Python. Cho WSL `memory=12GB`, `swap=8GB` trong
-`C:\Users\<tên>\.wslconfig`. Không chạy job streaming và DAG Airflow cùng lúc: `bash scripts/demo-mode.sh streaming|airflow`.
-Xem RAM: `bash scripts/demo-mode.sh status`.
+Đặt một lần trong `~/.bashrc` rồi mở terminal mới: `echo 'export JOBLENS_PROFILE=lite' >> ~/.bashrc`.
+Mọi script trong `deploy/` và `scripts/` đọc biến này (không ghi vào `.env` vì `.env` đồng bộ từ repo `joblens`).
+
+| RAM máy | Profile | WSL (`C:\Users\<tên>\.wslconfig`) | Khác gì |
+|---|---|---|---|
+| ≥ 16 GB | `full` (mặc định) | `memory=12GB`, `swap=8GB` | Cụm 1 server + 2 agent; Spark cluster mode có pod executor riêng; Kafka UI |
+| 8 GB | `lite` | `memory=5GB`, `swap=6GB` | Cụm 1 node, tắt Traefik; Spark **local mode** (`EXECUTORS=0`, cả job trong một pod, kể cả task Airflow); Kafka heap 256 MB; Trino heap 768 MB; Airflow nhỏ hơn; không cài Kafka UI |
+| 4 GB | – | – | Không đủ để chạy cụm (xem dưới) |
+
+**Ước tính (chưa đo trên máy 8 GB – ai chạy `lite` hãy ghi số thật vào `deploy/compat.md`):** dựa trên số đo cấu hình
+`full` ngày 2026-10-20 (`kubectl top`: cả cụm ~5,3 GB khi nhàn rỗi, trong đó Trino 771 MiB, Kafka 538 MiB), `lite`
+khi nhàn rỗi khoảng 3–3,5 GB; lúc chạy một job Spark local mode thêm ~1,2–1,5 GB. Vì vậy với `lite`:
+
+- Chạy **một** job Spark mỗi lúc: dừng streaming trước khi trigger DAG (`bash scripts/demo-mode.sh airflow`), DAG đã
+  xếp các task Spark tuần tự.
+- Chỉ cài Airflow/Grafana khi cần trình diễn; tắt khi không dùng:
+  `kubectl scale -n orchestration statefulset/airflow-scheduler deploy/airflow-dag-processor deploy/airflow-api-server --replicas=0`.
+- Đóng bớt ứng dụng Windows; trình duyệt chỉ mở tab cần thiết.
+
+Chuyển cụm `full` đang có sang `lite` (giữ dữ liệu trong cụm): đặt `JOBLENS_PROFILE=lite` rồi chạy lại
+`deploy/kafka/install.sh`, `deploy/trino/install.sh`, `deploy/airflow/install.sh`, `deploy/monitoring/install.sh`.
+Muốn cụm 1 node thì phải tạo lại cụm (`k3d cluster delete joblens` – **mất dữ liệu trong cụm**) rồi làm lại các bước.
+
+**Máy 4 GB:** Windows đã dùng ~2–2,5 GB, phần còn lại không đủ cho Kubernetes + Kafka (JVM) + Spark (JVM) + Trino
+(JVM) cùng lúc – cắt bớt nữa thì không còn là nền tảng của môn. Cách làm việc được:
+
+- Viết và kiểm thử mã không cần cụm: `uv sync && uv run pytest -q` (cần Java 17 cho test Spark), `dbt parse`.
+- Chạy cụm trên máy của bạn trong nhóm có RAM ≥ 16 GB, hoặc một VM cloud (credit sinh viên), rồi port-forward giao diện.
+
+Xem RAM bất cứ lúc nào: `bash scripts/demo-mode.sh status`. Không chạy job streaming và DAG Airflow cùng lúc:
+`bash scripts/demo-mode.sh streaming|airflow`.

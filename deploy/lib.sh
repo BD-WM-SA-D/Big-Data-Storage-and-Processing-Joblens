@@ -47,3 +47,26 @@ spark_image() {
   build_import "$tag" "${REPO_ROOT}/spark-jobs/Dockerfile" "$REPO_ROOT" >&2
   echo "$tag"
 }
+
+# Cấu hình theo cỡ máy: JOBLENS_PROFILE=full (mặc định, máy ≥ 16 GB) | lite (máy 8 GB) – xem deploy/README.md.
+# Đặt bằng:  echo 'export JOBLENS_PROFILE=lite' >> ~/.bashrc   (không ghi vào .env vì .env đồng bộ từ repo joblens)
+PROFILE="${JOBLENS_PROFILE:-full}"
+case "$PROFILE" in full|lite) ;; *) echo "JOBLENS_PROFILE phải là full hoặc lite (đang là '$PROFILE')"; exit 1;; esac
+
+# profile_values DIR – in "-f DIR/values-lite.yaml" khi PROFILE=lite và file tồn tại (thêm vào lệnh helm)
+profile_values() {
+  if [ "$PROFILE" = lite ] && [ -f "$1/values-lite.yaml" ]; then echo "-f $1/values-lite.yaml"; fi
+}
+
+# stop_spark_job PREFIX – dừng job Spark có tên bắt đầu bằng PREFIX trong namespace compute (cả hai chế độ:
+# cluster mode → pod driver/executor; local mode → Job do submit.sh tạo). Ví dụ: stop_spark_job bronze-jobs
+stop_spark_job() {
+  local pods
+  kubectl delete job -n compute -l "joblens-spark-app-prefix=$1" --wait=false >/dev/null 2>&1 || true
+  pods=$(kubectl get pod -n compute -o name 2>/dev/null | grep "^pod/$1-" || true)
+  if [ -n "$pods" ]; then
+    # shellcheck disable=SC2086
+    kubectl delete -n compute $pods --wait=false >/dev/null
+    echo "   đã dừng: $(echo "$pods" | tr '\n' ' ')"
+  fi
+}

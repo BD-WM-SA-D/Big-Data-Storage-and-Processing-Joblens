@@ -1,0 +1,18 @@
+# Bổ sung cho values.yaml khi JOBLENS_PROFILE=lite (máy 8 GB) – install.sh tự thêm "-f values-lite.yaml".
+# Heap 768 MB: đủ cho các truy vấn demo và dbt trên ~50 nghìn tin; truy vấn lớn hơn có thể báo hết bộ nhớ.
+server:
+  config:
+    query:
+      maxMemory: "300MB"
+coordinator:
+  jvm:
+    maxHeapSize: "768M"
+  config:
+    query:
+      maxMemoryPerNode: "300MB"
+  resources:
+    requests:
+      cpu: 200m
+      memory: 896Mi
+    limits:
+      memory: 1Gi

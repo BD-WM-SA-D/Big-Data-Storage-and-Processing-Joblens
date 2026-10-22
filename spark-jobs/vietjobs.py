@@ -209,11 +209,16 @@ def replay_to_kafka(
     batch: int,
     producer=None,
     sleep=time.sleep,
+    event_time: bool = True,
+    now_iso=lambda: datetime.now(timezone.utc)
+    .isoformat(timespec="milliseconds")
+    .replace("+00:00", "Z"),
 ) -> int:
     """Gửi message vào REPLAY_TOPIC theo đợt `batch` tin, giữ tốc độ ~`rate` tin/giây. Trả số tin đã gửi.
 
     key = source_job_id → cùng một tin luôn vào cùng partition (thứ tự theo tin). acks=all + idempotence:
-    gửi lại khi lỗi mạng không sinh bản trùng trong Kafka.
+    gửi lại khi lỗi mạng không sinh bản trùng trong Kafka. event_time=True: crawl_ts = lúc gửi (độ chính xác ms),
+    content_hash giữ nguyên vì không tính crawl_ts.
     """
     if producer is None:
         from confluent_kafka import Producer
@@ -238,6 +243,10 @@ def replay_to_kafka(
         t0 = time.monotonic()
         chunk = msgs[start : start + batch]
         for m in chunk:
+            if event_time:
+                # thời điểm phát sự kiện (như crawler vừa lấy tin) – dùng đo độ trễ đầu-cuối:
+                # thời điểm dữ liệu đọc được trong bronze − crawl_ts (scripts/benchmark-batch-vs-streaming.sh)
+                m = {**m, "crawl_ts": now_iso()}
             producer.produce(
                 REPLAY_TOPIC,
                 key=m["source_job_id"].encode(),
