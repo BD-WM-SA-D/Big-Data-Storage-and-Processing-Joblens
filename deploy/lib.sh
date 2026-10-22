@@ -35,10 +35,21 @@ image_tag() {
 }
 
 # build_import TAG DOCKERFILE CONTEXT – build image rồi nạp vào cụm k3d "joblens" (không cần registry).
+# Bỏ qua bước nạp (mất vài phút với image Spark ~2 GB) nếu mọi node đã có đúng image đó.
 build_import() {
   echo "==> Build image $1"
   docker build -q -t "$1" -f "$2" "$3"
-  k3d image import "$1" -c joblens
+  local id node missing=0
+  id="$(docker image inspect -f '{{.Id}}' "$1")"
+  for node in $(docker ps --format '{{.Names}}' | grep -E '^k3d-joblens-(server|agent)-[0-9]+$'); do
+    docker exec "$node" crictl inspecti -o go-template --template '{{.status.id}}' "docker.io/$1" 2>/dev/null \
+      | grep -qx "$id" || missing=1
+  done
+  if [ "$missing" = 0 ]; then
+    echo "    image đã có trên mọi node – bỏ qua k3d image import"
+  else
+    k3d image import "$1" -c joblens
+  fi
 }
 
 # spark_image – build + nạp image Spark job, in tag ra stdout (log build ra stderr).

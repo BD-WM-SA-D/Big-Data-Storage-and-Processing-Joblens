@@ -35,10 +35,10 @@ Hai kiến trúc kinh điển:
 |---|---|---|---|
 | Đường nạp bronze | batch + streaming song song, ghép ở serving | chỉ streaming; lịch sử nạp bằng replay vào Kafka | streaming là đường chính; batch chỉ để nạp lịch sử/khôi phục, ghi cùng một bảng |
 | Silver/gold | hai bản (batch + speed) | streaming liên tục | batch mỗi giờ, MERGE idempotent |
-| Độ tươi bronze | `<số đo B>` | `<số đo B>` | `<số đo B>` |
+| Độ tươi bronze (p95) | batch: ≤ chu kỳ + 122 s (lần 1) | 60,6 s (lần 1) | 60,6 s (lần 1) |
 | Độ tươi gold | speed layer: giây–phút | giây–phút | ≤ chu kỳ DAG + thời gian chạy (`<số đo>`) |
-| Chi phí thường trực | cao nhất (hai hệ) | job streaming chạy liên tục cho mọi tầng | một job streaming nhỏ (`<RAM không tải>` MiB) + job batch theo giờ |
-| Số file nhỏ | nhiều | nhiều nhất | `<số file B>` ở bronze, gộp bằng `iceberg_maintenance` |
+| Chi phí thường trực | cao nhất (hai hệ) | job streaming chạy liên tục cho mọi tầng | một job streaming nhỏ (~1.377 MiB khi không tải, lần 1) + job batch theo giờ |
+| Số file nhỏ | nhiều | nhiều nhất | 2 file / 5.000 tin ở bronze (lần 1, trigger 10 s), gộp bằng `iceberg_maintenance` |
 | Độ phức tạp vận hành | cao: hai mã, ghép kết quả | trung bình: mọi biến đổi là streaming, khó với MERGE/GX/dbt | thấp–trung bình: một mã nạp, dbt/GX chạy batch quen thuộc |
 | Tái xử lý | chạy lại batch | replay Kafka (giới hạn bởi retention) | replay Kafka hoặc `--full` trên bronze + time travel |
 
@@ -47,9 +47,9 @@ Hai kiến trúc kinh điển:
 Chọn **C – Kappa cho đường nạp, batch theo lịch cho silver/gold**, với điều kiện số đo trong
 `benchmarks/batch_vs_streaming.md` cho thấy:
 
-1. đường B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (docs/project-plan/03) ở tải chuẩn – `<p95 đo được>`;
-2. hai đường cho cùng tập khóa (`độ đúng` = 0) – `<giá trị đo được>`;
-3. số file nhỏ của B được `iceberg_maintenance` gộp lại trong một chu kỳ DAG – `<trước → sau>`.
+1. đường B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (docs/project-plan/03) ở tải chuẩn – lần 1: p95 = 60,6 s ở 100 tin/giây ✔;
+2. hai đường cho cùng tập khóa (`độ đúng` = 0) – lần 1: 0 ✔;
+3. số file nhỏ của B được `iceberg_maintenance` gộp lại trong một chu kỳ DAG – `<trước → sau>` (chưa đo).
 
 Lý do (định tính, chờ số đo xác nhận): một mã nạp duy nhất cho cả dữ liệu sống và dữ liệu lịch sử (tinh thần
 Kappa); silver/gold cần `MERGE INTO`, kiểm thử dbt và cổng GX – dễ làm đúng và kiểm tra ở chế độ batch; báo cáo
@@ -65,7 +65,7 @@ Kafka bằng job streaming riêng (ADR 0001 D4 của repo `joblens`), không c�
 
 ## Cần làm trước khi chuyển trạng thái "Đã chấp nhận"
 
-- [ ] Chạy `scripts/benchmark-batch-vs-streaming.sh` ít nhất 2 cấu hình (trigger 10 giây và 1 phút), ghi vào
-      `benchmarks/batch_vs_streaming.md`.
+- [x] Lần 1: trigger 10 giây, 100 tin/giây (`benchmarks/batch_vs_streaming.md`).
+- [ ] Lần đo đầy đủ có chi phí của đường A; lần với trigger 1 phút; đo số file trước/sau `iceberg_maintenance`.
 - [ ] Điền các ô `<…>` ở trên bằng số đo, dẫn link tới lần đo.
 - [ ] Thêm ADR vào danh mục `joblens/adr-index.md` (repo chung).

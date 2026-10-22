@@ -25,19 +25,32 @@ bash scripts/benchmark-batch-vs-streaming.sh 5000 100 "10 seconds"
 
 ## Lần đo
 
-### Lần 1 – <yyyy-mm-dd>
+### Lần 1 – 2026-10-23 (giờ VN)
 
-- Commit: `<sha>` · Profile: `<full|lite>` · Máy: `<CPU, RAM, RAM cấp cho WSL>` · Spark: `<cluster mode, 1 executor | local[2]>`
-- Tham số: N=`<…>`, RATE=`<…>` tin/giây, TRIGGER=`<…>`
+- Commit: `b67fd01` (A), `6e86d04` (B) – `spark-jobs/` giống nhau · Profile: `full` · Máy: `<CPU>`, 16 GB RAM, WSL `memory=12GB` (12 luồng) · Spark: cluster mode, 1 executor (1 GB)
+- Tham số: N=5000, RATE=100 tin/giây, TRIGGER=10 seconds
+- Đường A chạy lúc 00:27–00:35, đường B lúc 00:56–01:04 (lần chạy B dùng lại A bằng `REUSE_A`).
 
 | Đường | Dòng | ID khác nhau | File mới | Trễ p50 (s) | Trễ p95 (s) | Trễ max (s) | Thông lượng (dòng/s) | CPU-giây | GB-giờ | RAM đỉnh (MiB) | Thời gian job (s) |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| A – batch | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> |
-| B – streaming | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | <…> | – |
+| A – batch | 5000 | 5000 | 1 | 122.0 | 122.0 | 122.0 | 41.0 | – | – | – | 468 |
+| B – streaming | 5000 | 5000 | 2 | 46.2 | 60.6 | 62.7 | 69.3 | 100 | 0.0714 | 1392 | – |
 
-- Độ đúng: `<…>` source_job_id chỉ có ở một đường (kỳ vọng 0).
-- Streaming khi không tải: RAM đỉnh `<…>` MiB.
-- Nhận xét: `<…>`
+- Độ đúng: 0 source_job_id chỉ có ở một đường (kỳ vọng 0).
+- Streaming khi không tải: RAM đỉnh 1377 MiB, 0.0222 GB-giờ trong 60 giây.
+- Nhận xét:
+  - Hai đường cho cùng tập khóa (độ đúng 0).
+  - B: trễ p95 60,6 giây – đạt chỉ tiêu streaming bronze ≤ 2 phút (`joblens/docs/project-plan/03`, mục Metrics).
+  - A: trễ 122 giây là thời gian từ lúc job đọc dữ liệu tới lúc ghi file. Chạy theo lịch mỗi giờ thì độ trễ thực tế
+    còn cộng thêm thời gian chờ tới lượt (trung bình ~30 phút, tối đa ~60 phút).
+  - B chỉ sinh 2 file trong ~50 giây gửi dữ liệu với trigger 10 giây, nghĩa là mỗi micro-batch có dữ liệu chạy lâu
+    hơn 10 giây. Lần sau xem *Batch Duration* trên Spark UI (tab Structured Streaming) để có số đo cụ thể.
+  - Thông lượng hai đường không so sánh trực tiếp được: B bị giới hạn bởi RATE 100 tin/giây; A bị chi phối bởi chi
+    phí khởi động job với N nhỏ.
+  - "Thời gian job" 468 giây của A gồm cả bước nạp image vào k3d (`k3d image import`, vài phút) – không dùng để so sánh.
+  - Chi phí (CPU-giây, GB-giờ, RAM) của A chưa có: vòng lấy mẫu bị lỗi ở lần chạy A (đã sửa ở commit 8e8e173).
+    Cần một lần đo đầy đủ không dùng `REUSE_A`.
+  - B giữ ~1,4 GB RAM thường trực kể cả khi không có dữ liệu – chi phí cố định của đường streaming.
 
 ## Gợi ý các lần đo tiếp
 
