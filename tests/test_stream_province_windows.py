@@ -144,3 +144,22 @@ def test_watermark_drops_late_events_on_a_real_stream(spark, tmp_path):
     assert seen[("10:00", "01")] == 1  # vẫn 1, tin trễ không được cộng
     assert seen[("10:25", "01")] == 1 and seen[("10:30", "01")] == 1
     assert dropped == 1
+
+
+def test_trino_schema_covers_document_fields():
+    from datetime import datetime, timezone
+
+    start = datetime(2026, 10, 23, 15, 0, tzinfo=timezone.utc)
+    row = {
+        "window_start": start,
+        "window_end": start,
+        "location_code": "01",
+        "postings": 3,
+        "salary_postings": 2,
+        "salary_mid_sum_vnd": 30_000_000.0,
+        "sources": 1,
+    }
+    doc = S.to_documents([row], 7, start)[0]
+    schema = S.trino_schema_doc()
+    assert schema["table"] == S.COLLECTION
+    assert {f["name"] for f in schema["fields"]} == set(doc)

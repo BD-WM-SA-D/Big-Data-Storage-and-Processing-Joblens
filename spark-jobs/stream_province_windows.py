@@ -36,6 +36,21 @@ from silver_job_postings import normalize_udf
 MONGO_DB = "joblens"
 COLLECTION = "province_windows"
 UNKNOWN = "unknown"
+# Lược đồ cho catalog mongodb của Trino. Trino tự đoán cột từ document mẫu rồi LƯU vào collection _schema;
+# nếu lần đầu Grafana hỏi lúc collection còn rỗng thì Trino lưu lược đồ chỉ có _id và không đoán lại nữa
+# (lỗi "Column 'window_start' cannot be resolved"). Vì vậy job tự ghi lược đồ đúng khi khởi động.
+TRINO_FIELDS = [
+    ("_id", "varchar"),
+    ("window_start", "timestamp(3)"),
+    ("window_end", "timestamp(3)"),
+    ("location_code", "varchar"),
+    ("postings", "bigint"),
+    ("salary_postings", "bigint"),
+    ("avg_salary_mid_vnd", "bigint"),
+    ("sources", "bigint"),
+    ("batch_id", "bigint"),
+    ("updated_at", "timestamp(3)"),
+]
 
 log = logging.getLogger("stream_province_windows")
 
@@ -111,6 +126,14 @@ def to_documents(rows: list[dict], batch_id: int, now: datetime) -> list[dict]:
     return docs
 
 
+def trino_schema_doc(collection: str = COLLECTION) -> dict:
+    """Document cho collection _schema mà connector MongoDB của Trino đọc để biết cột của bảng."""
+    return {
+        "table": collection,
+        "fields": [{"name": n, "type": t, "hidden": False} for n, t in TRINO_FIELDS],
+    }
+
+
 def mongo_writer(url: str, collection: str = COLLECTION):
     """Hàm foreachBatch: kết quả mỗi micro-batch nhỏ (≤ số tỉnh × số cửa sổ đang mở) nên gom về driver
     rồi bulk upsert bằng pymongo – không cần connector Spark–MongoDB."""
@@ -119,6 +142,9 @@ def mongo_writer(url: str, collection: str = COLLECTION):
     client = MongoClient(url, tz_aware=True)
     coll = client.get_default_database(MONGO_DB)[collection]
     coll.create_index([("window_start", 1), ("location_code", 1)])
+    coll.database["_schema"].replace_one(
+        {"table": collection}, trino_schema_doc(collection), upsert=True
+    )
 
     def write(batch: DataFrame, batch_id: int) -> None:
         rows = [r.asDict() for r in batch.collect()]
