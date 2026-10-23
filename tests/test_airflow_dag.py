@@ -78,7 +78,12 @@ def test_executors_variable_picks_local_or_k8s(tmp_path, executors, expect):
 def test_dag_jobs_exist_in_spark_image():
     src = (DAGS / "joblens_pipeline.py").read_text(encoding="utf-8")
     jobs = re.findall(r'spark_task\(\s*"[a-z_]+",\s*"([a-z_]+)"', src)
-    assert set(jobs) == {"silver_job_postings", "gx_silver", "maintenance_iceberg"}
+    assert set(jobs) == {
+        "silver_job_postings",
+        "gx_silver",
+        "analytics_spark",
+        "maintenance_iceberg",
+    }
     for job in jobs:
         assert (ROOT / "spark-jobs" / f"{job}.py").exists()
 
@@ -105,7 +110,10 @@ def test_dag_parses_with_airflow():
     }
     assert dag.task_dict["gx_validate_silver"].downstream_task_ids == {
         "dbt_build_gold",
-        "iceberg_maintenance",
+        "spark_analytics",
+    }
+    assert dag.task_dict["spark_analytics"].downstream_task_ids == {
+        "iceberg_maintenance"
     }
     assert dag.max_active_runs == 1 and not dag.catchup
     for t in dag.tasks:

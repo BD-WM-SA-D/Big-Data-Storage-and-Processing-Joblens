@@ -3,7 +3,8 @@
 
 ```
 silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold        (Trino: seed + gold + kiểm thử dữ liệu)
-                                            └──> iceberg_maintenance   (compaction + dọn snapshot)
+                                            └──> spark_analytics ──> iceberg_maintenance
+                                                 (Spark → MongoDB)    (compaction + dọn snapshot)
 ```
 
 - **silver_job_postings** – Spark đọc phần bronze mới (mốc `joblens.bronze_watermark`), chuẩn hóa, `MERGE INTO`
@@ -12,6 +13,8 @@ silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold  
   có kỳ vọng hỏng thì task đỏ và hai task sau không chạy – gold giữ bản cũ, không bị ghi đè bằng dữ liệu sai.
 - **dbt_build_gold** – `dbt build` trên Trino: `gold.dim_location`, `gold.mart_salary_role_region` và test dữ liệu;
   test lỗi thì task đỏ, dữ liệu gold sai không được coi là xong.
+- **spark_analytics** – phân tích bằng Spark (pivot, hàm tổng hợp tùy biến, broadcast/sort-merge join, window,
+  thống kê, MLlib) → MongoDB `analytics_*`; kế hoạch thực thi lưu ở `s3://joblens/reports/spark-plans/`.
 - **iceberg_maintenance** – gộp file nhỏ do streaming sinh ra, gộp manifest, xóa snapshot cũ (giữ 10 bản gần nhất).
 
 Job streaming `bronze_jobs` (Kafka → bronze) chạy liên tục bên ngoài DAG; DAG chỉ xử lý phần batch phía sau.
@@ -65,7 +68,11 @@ def spark_task(
             *(k8s.V1EnvVar(name=k, value=v) for k, v in js.CLUSTER_ENV.items()),
         ],
         env_from=[
-            k8s.V1EnvFromSource(secret_ref=k8s.V1SecretEnvSource(name=js.S3_SECRET))
+            k8s.V1EnvFromSource(secret_ref=k8s.V1SecretEnvSource(name=js.S3_SECRET)),
+            # MongoDB (deploy/mongodb); optional → task không cần MongoDB vẫn chạy khi chưa cài
+            k8s.V1EnvFromSource(
+                secret_ref=k8s.V1SecretEnvSource(name=js.MONGO_SECRET, optional=True)
+            ),
         ],
         container_resources=k8s.V1ResourceRequirements(
             requests={"cpu": "250m", "memory": "1536Mi"},
@@ -111,7 +118,10 @@ with DAG(
 
     quality = spark_task("gx_validate_silver", "gx_silver")
 
+    analytics = spark_task("spark_analytics", "analytics_spark")
+
     maintenance = spark_task("iceberg_maintenance", "maintenance_iceberg")
 
     # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt nhẹ, chạy song song với bảo trì)
-    silver >> quality >> [gold, maintenance]
+    silver >> quality >> [gold, analytics]
+    analytics >> maintenance

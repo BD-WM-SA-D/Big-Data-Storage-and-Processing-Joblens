@@ -145,6 +145,13 @@ def main(argv: list[str] | None = None) -> None:
     )
     p.add_argument("--rate", type=float, default=50.0, help="Kafka: số tin/giây")
     p.add_argument("--batch", type=int, default=500, help="Kafka: số tin mỗi lần gửi")
+    p.add_argument(
+        "--late-every",
+        type=int,
+        default=0,
+        help="Kafka: cứ N tin thì 1 tin có crawl_ts lùi --late-seconds (0 = tắt)",
+    )
+    p.add_argument("--late-seconds", type=int, default=1200)
     args = p.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -167,7 +174,12 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.sink == "kafka":
         replay_to_kafka(
-            msgs, os.environ["JOBLENS_KAFKA_BOOTSTRAP"], args.rate, args.batch
+            msgs,
+            os.environ["JOBLENS_KAFKA_BOOTSTRAP"],
+            args.rate,
+            args.batch,
+            late_every=args.late_every,
+            late_seconds=args.late_seconds,
         )
         return
 
@@ -202,6 +214,15 @@ def main(argv: list[str] | None = None) -> None:
         return
 
 
+def _shift_iso(ts: str, seconds: int) -> str:
+    t = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp() + seconds
+    return (
+        datetime.fromtimestamp(t, timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
+
+
 def replay_to_kafka(
     msgs: list[dict],
     bootstrap: str,
@@ -210,6 +231,8 @@ def replay_to_kafka(
     producer=None,
     sleep=time.sleep,
     event_time: bool = True,
+    late_every: int = 0,
+    late_seconds: int = 1200,
     now_iso=lambda: datetime.now(timezone.utc)
     .isoformat(timespec="milliseconds")
     .replace("+00:00", "Z"),
@@ -242,11 +265,16 @@ def replay_to_kafka(
     for start in range(0, len(msgs), batch):
         t0 = time.monotonic()
         chunk = msgs[start : start + batch]
-        for m in chunk:
+        for i, m in enumerate(chunk, start=sent + 1):
             if event_time:
                 # thời điểm phát sự kiện (như crawler vừa lấy tin) – dùng đo độ trễ đầu-cuối:
                 # thời điểm dữ liệu đọc được trong bronze − crawl_ts (scripts/benchmark-batch-vs-streaming.sh)
-                m = {**m, "crawl_ts": now_iso()}
+                ts = now_iso()
+                if late_every and i % late_every == 0:
+                    # tin "đến trễ": crawl_ts lùi late_seconds giây – để thấy watermark của
+                    # stream_province_windows loại tin quá trễ
+                    ts = _shift_iso(ts, -late_seconds)
+                m = {**m, "crawl_ts": ts}
             producer.produce(
                 REPLAY_TOPIC,
                 key=m["source_job_id"].encode(),

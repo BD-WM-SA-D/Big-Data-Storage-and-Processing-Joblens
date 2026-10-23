@@ -29,6 +29,7 @@ CLUSTER_ENV = {
 # Khóa S3 trong Secret "joblens-s3" (deploy/lib.sh: s3_secret) – driver nhận qua envFrom, executor qua secretKeyRef
 S3_SECRET = "joblens-s3"
 S3_SECRET_KEYS = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_REGION"]
+MONGO_SECRET = "joblens-mongo"  # biến JOBLENS_MONGO_URL (deploy/mongodb/install.sh)
 
 
 def spark_submit_script(

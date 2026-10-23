@@ -1,0 +1,15 @@
+# Bổ sung khi đã cài deploy/mongodb (install.sh tự thêm file này nếu có Secret serving/joblens-mongo).
+# Catalog "mongodb": Trino đọc collection MongoDB như bảng (mongodb.joblens.<collection>) – Grafana dùng chung
+# datasource Trino để vẽ cả bảng Iceberg lẫn kết quả streaming trong MongoDB (truy vấn liên nguồn).
+# envFrom là danh sách nên phải ghi lại cả joblens-s3 (Helm không gộp danh sách giữa các file values).
+envFrom:
+  - secretRef:
+      name: joblens-s3
+  - secretRef:
+      name: joblens-mongo
+
+catalogs:
+  mongodb: |
+    connector.name=mongodb
+    mongodb.connection-url=${ENV:JOBLENS_MONGO_URL}
+    mongodb.schema-collection=_schema

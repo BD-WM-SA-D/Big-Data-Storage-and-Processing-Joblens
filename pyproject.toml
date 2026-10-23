@@ -8,6 +8,8 @@ dependencies = [
     "dbt-trino>=1.10.6",
     "great-expectations>=1.23,<1.24",
     "joblens-contracts",
+    "pyarrow>=25.0.1",
+    "pymongo>=4.18.3,<5",
     "pyspark>=4.1,<4.2",
 ]
 

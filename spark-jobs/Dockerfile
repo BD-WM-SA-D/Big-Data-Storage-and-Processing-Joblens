@@ -26,8 +26,10 @@ RUN set -eux; cd /opt/spark/jars; \
       echo "$(curl -fsSL "${MAVEN}/${coord}.sha1" | cut -c1-40)  $f" | sha1sum -c -; \
     done; \
     chmod 644 /opt/spark/jars/*.jar; \
-    pip install --no-cache-dir boto3==1.43.114 confluent-kafka==2.16.0 great-expectations==1.23.2
-# confluent-kafka: replay VietJobs không cần Spark; great-expectations: task gx_validate_silver (gx_silver.py)
+    pip install --no-cache-dir boto3==1.43.114 confluent-kafka==2.16.0 great-expectations==1.23.2 \
+      pymongo==4.18.3 pyarrow==25.0.1
+# confluent-kafka: replay VietJobs không cần Spark; great-expectations: task gx_validate_silver (gx_silver.py);
+# pymongo: ghi MongoDB (stream_province_windows.py, analytics_spark.py); pyarrow: pandas UDF (analytics_spark.py)
 
 # Mã job + bảng ánh xạ địa điểm (nguồn duy nhất: dbt/seeds/locations_2025.csv)
 COPY --chown=spark:spark spark-jobs/*.py /opt/joblens/

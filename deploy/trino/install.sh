@@ -16,9 +16,11 @@ helm repo add trino https://trinodb.github.io/charts >/dev/null 2>&1 || true
 helm repo update trino >/dev/null
 
 echo "==> Trino (chart ${TRINO_CHART_VERSION})"
+# catalog mongodb chỉ bật khi đã cài deploy/mongodb (cần Secret joblens-mongo)
+mongo_values() { if kubectl get secret joblens-mongo -n "$NS" >/dev/null 2>&1; then echo "-f ${HERE}/values-mongodb.yaml"; fi; }
 # shellcheck disable=SC2046  # profile_values cố ý tách thành hai đối số (-f FILE)
 helm upgrade --install trino trino/trino --version "$TRINO_CHART_VERSION" \
-  -n "$NS" -f "${HERE}/values.yaml" $(profile_values "$HERE") --wait --timeout 10m
+  -n "$NS" -f "${HERE}/values.yaml" $(profile_values "$HERE") $(mongo_values) --wait --timeout 10m
 # Secret có thể đổi mà values không đổi → khởi động lại để pod đọc khóa mới
 kubectl rollout restart deployment -n "$NS" -l app.kubernetes.io/name=trino >/dev/null
 kubectl rollout status deployment -n "$NS" -l app.kubernetes.io/name=trino --timeout=5m

@@ -2,12 +2,15 @@
 
 Thứ tự cài cho môi trường dev (một máy, cụm k3d `joblens` 1 server + 2 agent). Mọi lệnh chạy từ gốc repo, trong WSL/Linux. Mỗi script chạy lại nhiều lần vẫn an toàn.
 
+Dựng tất cả một lần (máy mới, GitHub Codespaces – [`docs/cloud-codespaces.md`](../docs/cloud-codespaces.md)): `bash scripts/bootstrap-all.sh`.
+
 | Bước | Lệnh | Namespace | Cài gì |
 |---|---|---|---|
 | −1 | `bash deploy/k3d/create-cluster.sh` (máy 8 GB: `JOBLENS_PROFILE=lite …`) | – | Cụm k3d `joblens` (chỉ khi chưa có cụm) |
 | 0 | `cp .env.example .env && uv sync` | – | Biến môi trường, Python + pyspark (để chạy `spark-submit`) |
 | 1 | `bash deploy/kafka/install.sh` | `ingest` | Strimzi 1.2.0, Kafka 4.3.1 KRaft 1 node, 7 topic (`deploy/kafka/topics.yaml`) |
 | 2 | `bash deploy/storage/install.sh` | `lakehouse` | SeaweedFS 4.48 (S3, bucket `joblens`), Lakekeeper v0.13.3 + Postgres 17.6, warehouse `joblens` |
+| 2b | `bash deploy/mongodb/install.sh` | `serving` | MongoDB 8.0 (NoSQL serving): user `joblens`, Secret `joblens-mongo` cho Spark và Trino |
 | 3 | `bash deploy/trino/install.sh` | `serving` | Trino 483 (một node: coordinator kiêm worker – vừa máy 16 GB), catalog `iceberg` |
 | 4 | `bash deploy/smoke-e2e.sh` | `compute` | Fixtures → Kafka → Spark streaming → `bronze.jobs_raw` → Trino |
 | 5 | `bash deploy/data/upload-vietjobs.sh` | `lakehouse` | Tải VietJobs (Hugging Face) → `s3://joblens/raw/vietjobs/` |
@@ -29,7 +32,8 @@ Sau bước 4 thành công, thêm một dòng vào [`compat.md`](compat.md) (quy
 | Kafka bootstrap | `joblens-kafka-bootstrap.ingest.svc.cluster.local:9092` |
 | S3 (SeaweedFS) | `http://seaweedfs-all-in-one.lakehouse.svc.cluster.local:8333`, bucket `joblens` |
 | Iceberg REST catalog (Lakekeeper) | `http://lakekeeper.lakehouse.svc.cluster.local:8181/catalog`, warehouse `joblens` |
-| Trino | `http://trino.serving.svc.cluster.local:8080`, catalog `iceberg` |
+| Trino | `http://trino.serving.svc.cluster.local:8080`, catalog `iceberg` (+ `mongodb` khi đã cài MongoDB) |
+| MongoDB | `mongodb.serving.svc.cluster.local:27017`, database `joblens` (URL trong Secret `joblens-mongo`) |
 | Airflow API/UI | `http://airflow-api-server.orchestration.svc.cluster.local:8080` |
 | Grafana | `http://grafana.monitoring.svc.cluster.local:3000` |
 | Kafka UI | `http://kafka-ui.monitoring.svc.cluster.local:8080` |
@@ -52,6 +56,7 @@ Từ máy mình: `bash scripts/demo-ui.sh` mở cùng lúc Grafana (3000), Kafka
 - Spark chạy bằng `spark-submit --master k8s://` (cluster mode), image `joblens/spark-jobs:<version>-<gitsha>` build từ `spark-jobs/Dockerfile` và nạp vào k3d bằng `k3d image import` – không cần registry.
 - Airflow chạy LocalExecutor; mỗi task của DAG là một pod trong `compute` (KubernetesPodOperator). Task Spark chạy client mode – pod task là driver, tạo pod executor bằng SA `spark` – nên log Spark hiện thẳng trên Airflow. DAG nạp từ ConfigMap `joblens-dags`; tag image là Airflow Variable `joblens_spark_image`, `joblens_dbt_image` khai báo qua Helm values (`deploy/airflow/install.sh`).
 - `spark-jobs/gx_silver.py` (task `gx_validate_silver`): Great Expectations 1.23 trên Spark – khóa, danh mục, khoảng lương, 34 mã tỉnh, độ phủ địa điểm ≥ 90%, lương ≥ 50%. Hỏng thì dbt không chạy (gold giữ bản cũ). Kết quả JSON ở `s3://joblens/quality/gx/silver_job_postings/`.
+- MongoDB là tầng phục vụ NoSQL: `stream_province_windows.py` (streaming có state, watermark) upsert `province_windows`; `analytics_spark.py` (task `spark_analytics`) ghi `analytics_*`. Collection nội bộ của repo này nên chưa có contract ở `joblens`; repo khác cần đọc thì thêm contract trước.
 - `spark-jobs/maintenance_iceberg.py` (task `iceberg_maintenance`): `rewrite_data_files` gộp file nhỏ do streaming, `rewrite_manifests`, `expire_snapshots` (giữ 10 snapshot gần nhất). Không chạy `remove_orphan_files` khi streaming đang ghi.
 - Checkpoint của job streaming nằm trên PVC `compute/spark-checkpoints`. Xóa PVC thì job đọc lại Kafka từ đầu (bronze sẽ có bản ghi lặp).
 

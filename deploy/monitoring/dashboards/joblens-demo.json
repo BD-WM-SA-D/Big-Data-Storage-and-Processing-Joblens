@@ -9,7 +9,7 @@
   "editable": true,
   "refresh": "5s",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "time": {
     "from": "now-30m",
     "to": "now"
@@ -617,6 +617,194 @@
       },
       "options": {
         "showHeader": true
+      }
+    },
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 2
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**NoSQL (MongoDB) + Spark nâng cao.** Các ô dưới đọc collection MongoDB qua catalog `mongodb` của Trino – có ô join MongoDB với bảng Iceberg trong cùng một truy vấn (truy vấn liên nguồn)."
+      },
+      "id": 101,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tin mới theo tỉnh – cửa sổ 5 phút (streaming có trạng thái → MongoDB)",
+      "description": "stream_province_windows.py: window(crawl_ts, 5 phút) + watermark 10 phút, output mode update, upsert MongoDB. Tên tỉnh lấy từ bảng Iceberg gold.dim_location (join liên nguồn).",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 16,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT w.window_start AS time, d.name AS metric, w.postings AS value\nFROM (SELECT window_start, location_code, postings, to_unixtime(window_start) AS ws_epoch\n      FROM mongodb.joblens.province_windows) w\nJOIN iceberg.gold.dim_location d ON d.location_code = w.location_code\nWHERE $__unixEpochFilter(w.ws_epoch)\nORDER BY 1",
+          "format": 0
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 102,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Lần chạy spark_analytics gần nhất (MLlib, kế hoạch thực thi)",
+      "description": "analytics_spark.py ghi vào MongoDB analytics_runs. RMSE theo triệu VND trên tập kiểm tra; so với mô hình luôn đoán trung vị.",
+      "gridPos": {
+        "x": 16,
+        "y": 37,
+        "w": 8,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT run_at AS luc_chay,\n       round(model.test_rmse_million_vnd, 2) AS rmse_mo_hinh_trieu,\n       round(model.baseline_median_rmse_million_vnd, 2) AS rmse_doan_trung_vi_trieu,\n       round(model.test_r2_log, 3) AS r2_log,\n       plan_checks.broadcast_join AS broadcast_join,\n       plan_checks.sort_merge_join AS sort_merge_join,\n       plan_checks.bronze_filter_pushed AS partition_pruning\nFROM mongodb.joblens.analytics_runs ORDER BY run_at DESC LIMIT 5",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "id": 103,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      }
+    },
+    {
+      "type": "barchart",
+      "title": "Lương theo tỉnh: trung vị vs trung bình cắt 10% (Spark, triệu VND)",
+      "description": "percentile_approx (có sẵn) so với pandas UDF trimmed_mean (hàm tổng hợp tùy biến). 10 tỉnh nhiều tin nhất.",
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT name AS tinh_thanh, median_salary_vnd / 1e6 AS trung_vi, trimmed_mean_salary_vnd / 1e6 AS tb_cat_10\nFROM mongodb.joblens.analytics_salary_by_province ORDER BY postings DESC LIMIT 10",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "id": 104,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      }
+    },
+    {
+      "type": "table",
+      "title": "Pivot vùng × cấp bậc (Spark pivot → MongoDB)",
+      "gridPos": {
+        "x": 12,
+        "y": 46,
+        "w": 12,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT region AS vung, intern, junior, mid, senior, lead, manager\nFROM mongodb.joblens.analytics_level_region_pivot ORDER BY region",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      },
+      "id": 105,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
       }
     }
   ],

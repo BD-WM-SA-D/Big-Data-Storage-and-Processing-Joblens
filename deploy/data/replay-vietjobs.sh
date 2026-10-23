@@ -3,6 +3,7 @@
 # Chạy một pod Python nhỏ (producer confluent-kafka, ~300 MB) thay vì job Spark – xem spark-jobs/vietjobs.py.
 #   bash deploy/data/replay-vietjobs.sh                 # 3.000 tin, 50 tin/giây (~1 phút)
 #   bash deploy/data/replay-vietjobs.sh 10000 200       # LIMIT RATE
+#   bash deploy/data/replay-vietjobs.sh 3000 50 --late-every 10   # 1/10 tin có crawl_ts lùi 20 phút (thử watermark)
 # Cần: deploy/data/upload-vietjobs.sh đã chạy (CSV trên s3://joblens/raw/vietjobs/), job streaming đang chạy
 # (bash deploy/spark/submit.sh bronze_jobs …) nếu muốn thấy dữ liệu vào bronze.
 set -euo pipefail
@@ -12,6 +13,9 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 
 LIMIT="${1:-3000}"
 RATE="${2:-50}"
+shift $(( $# < 2 ? $# : 2 ))
+EXTRA=""
+for a in "$@"; do EXTRA+=", $(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$a")"; done
 NS=compute
 JOB="vietjobs-replay-$(date +%H%M%S)"
 
@@ -42,7 +46,7 @@ spec:
           image: ${TAG}
           imagePullPolicy: IfNotPresent
           command: ["python3", "/opt/joblens/vietjobs.py", "--sink", "kafka",
-                    "--limit", "${LIMIT}", "--rate", "${RATE}", "--batch", "100"]
+                    "--limit", "${LIMIT}", "--rate", "${RATE}", "--batch", "100"${EXTRA}]
           env:
             - name: JOBLENS_KAFKA_BOOTSTRAP
               value: joblens-kafka-bootstrap.ingest.svc.cluster.local:9092

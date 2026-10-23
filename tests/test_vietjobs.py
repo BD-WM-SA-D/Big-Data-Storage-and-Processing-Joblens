@@ -165,7 +165,9 @@ def test_kafka_sink_does_not_need_spark(monkeypatch):
     calls = {}
     monkeypatch.setenv("JOBLENS_KAFKA_BOOTSTRAP", "k:9092")
     monkeypatch.setattr(
-        vietjobs, "replay_to_kafka", lambda msgs, *a: calls.setdefault("n", len(msgs))
+        vietjobs,
+        "replay_to_kafka",
+        lambda msgs, *a, **kw: calls.setdefault("n", len(msgs)),
     )
     monkeypatch.setitem(
         sys.modules, "pyspark", None
@@ -198,3 +200,23 @@ def test_replay_sets_event_time_per_message(messages):
     assert messages[0]["crawl_ts"] == TS  # không sửa list gốc
     jsonschema = pytest.importorskip("jsonschema")
     jsonschema.Draft202012Validator(load_schema("job_posting.v1")).validate(sent[0])
+
+
+def test_replay_late_every_shifts_crawl_ts_back(messages):
+    fake = FakeProducer()
+    vietjobs.replay_to_kafka(
+        messages,
+        "x",
+        rate=1e6,
+        batch=2,
+        producer=fake,
+        sleep=lambda _: None,
+        late_every=2,
+        late_seconds=1200,
+        now_iso=lambda: "2026-10-23T10:30:00.000Z",
+    )
+    ts = [json.loads(v)["crawl_ts"] for _, _, v in fake.sent]
+    # tin thứ 2 và 4 (đếm từ 1, qua nhiều đợt gửi) lùi 20 phút
+    assert ts == ["2026-10-23T10:30:00.000Z", "2026-10-23T10:10:00.000Z"] * 2 + [
+        "2026-10-23T10:30:00.000Z"
+    ]

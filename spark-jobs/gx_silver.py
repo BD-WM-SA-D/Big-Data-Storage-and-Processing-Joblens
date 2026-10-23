@@ -110,7 +110,13 @@ def validate(silver: DataFrame, codes: list[str]) -> list[dict]:
     import great_expectations.expectations as gxe
 
     jobs, locs = prepare(silver)
+    from great_expectations.data_context.types.base import ProgressBarsConfig
+
     ctx = gx.get_context(mode="ephemeral")
+    # tắt thanh tiến trình "Calculating Metrics" (biến TQDM_DISABLE không đủ – GX tự quyết định hiển thị)
+    ctx.variables.progress_bars = ProgressBarsConfig(
+        globally=False, metric_calculations=False
+    )
     ds = ctx.data_sources.add_spark("spark")
     out: list[dict] = []
     for name, df, expectations in [

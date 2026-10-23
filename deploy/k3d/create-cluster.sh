@@ -18,7 +18,8 @@ if [ "$PROFILE" = lite ]; then
   k3d cluster create joblens --image "$K3S_IMAGE" --servers 1 --agents 0 \
     --k3s-arg "--disable=traefik@server:0"
 else
-  k3d cluster create joblens --image "$K3S_IMAGE" --servers 1 --agents 2
+  # K3D_AGENTS: số node agent (mặc định 2). GitHub Codespaces đặt 0 để tiết kiệm đĩa (mỗi node giữ một bản image)
+  k3d cluster create joblens --image "$K3S_IMAGE" --servers 1 --agents "${K3D_AGENTS:-2}"
 fi
 kubectl get nodes
 echo "Tiếp theo: các bước trong deploy/README.md (kafka → storage → trino → …), giữ JOBLENS_PROFILE=${PROFILE}."

@@ -76,6 +76,7 @@ spec:
             - {name: JOBLENS_USD_VND, value: "${JOBLENS_USD_VND:-26000}"}
           envFrom:
             - secretRef: {name: joblens-s3}
+            - secretRef: {name: joblens-mongo, optional: true}
           resources:
             requests: {cpu: 250m, memory: 1Gi}
             limits: {memory: 2Gi}
@@ -113,6 +114,10 @@ for side in driverEnv executorEnv; do
             --conf "${prefix}.JOBLENS_CHECKPOINT_DIR=/checkpoints"
             --conf "${prefix}.JOBLENS_USD_VND=${JOBLENS_USD_VND:-26000}")
 done
+# MongoDB (deploy/mongodb) – chỉ gắn khi Secret có, để job không cần MongoDB vẫn chạy khi chưa cài
+if kubectl get secret joblens-mongo -n "$NS" >/dev/null 2>&1; then
+  envconf+=(--conf "spark.kubernetes.driver.secretKeyRef.JOBLENS_MONGO_URL=joblens-mongo:JOBLENS_MONGO_URL")
+fi
 for role in driver executor; do
   for k in AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION; do
     envconf+=(--conf "spark.kubernetes.${role}.secretKeyRef.${k}=joblens-s3:${k}")

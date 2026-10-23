@@ -43,7 +43,7 @@ forward monitoring kafka-ui           8081 8080 "Kafka UI"   "/ui/clusters/joble
 forward orchestration airflow-api-server 8082 8080 "Airflow" "/dags/joblens_pipeline"
 forward serving    trino              8080 8080 "Trino"      "/ui/"
 forward lakehouse  lakekeeper         8181 8181 "Lakekeeper" "/ui/"
-forward lakehouse  seaweedfs-all-in-one 8888 8888 "SeaweedFS" "/buckets/joblens/warehouse/"
+forward lakehouse  seaweedfs-all-in-one 8888 8888 "SeaweedFS" "/buckets/joblens/"
 echo
 echo "Mật khẩu: Grafana admin = kubectl get secret grafana-admin -n monitoring -o jsonpath='{.data.password}' | base64 -d"
 echo "          Airflow admin = kubectl get secret airflow-admin -n orchestration -o jsonpath='{.data.password}' | base64 -d"
