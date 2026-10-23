@@ -21,12 +21,14 @@ coordinator:
       includeCoordinator: true
     query:
       maxMemoryPerNode: "600MB"
+  # limit = heap 1400M + ~0,9 GB ngoài heap (metaspace, luồng, bộ đệm trực tiếp). Với limit 1792Mi (sát heap) pod
+  # khởi động lại giữa lần dbt build 2026-10-23 01:47 (dbt báo Trino "Connection refused"; seed + mart chạy song song).
   resources:
     requests:
       cpu: 250m
-      memory: 1536Mi
-    limits:
       memory: 1792Mi
+    limits:
+      memory: 2304Mi
 
 worker:
   jvm:

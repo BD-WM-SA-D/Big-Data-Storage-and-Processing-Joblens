@@ -12,7 +12,8 @@ USER dbt
 ENV DBT_SEND_ANONYMOUS_USAGE_STATS=false \
     DBT_PROFILES_DIR=/opt/dbt \
     DBT_TRINO_HOST=trino.serving.svc.cluster.local \
-    DBT_TRINO_PORT=8080
+    DBT_TRINO_PORT=8080 \
+    DBT_THREADS=1
 # Kiểm tra cú pháp project khi build (không cần kết nối Trino)
 RUN dbt parse --no-partial-parse
 ENTRYPOINT ["dbt"]

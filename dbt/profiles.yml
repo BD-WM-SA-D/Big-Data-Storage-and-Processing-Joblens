@@ -11,4 +11,5 @@ joblens:
       http_scheme: http
       database: iceberg
       schema: gold
-      threads: 2
+      # trong cụm (image dbt) chạy 1 luồng để không dồn hai truy vấn nặng vào Trino một node cùng lúc
+      threads: "{{ env_var('DBT_THREADS', '2') | int }}"

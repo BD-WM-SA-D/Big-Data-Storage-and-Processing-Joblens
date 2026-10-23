@@ -10,9 +10,9 @@ coordinator:
   config:
     query:
       maxMemoryPerNode: "300MB"
-  resources:
+  resources:  # chừa ~0,5 GB ngoài heap (xem values.yaml)
     requests:
       cpu: 200m
-      memory: 896Mi
-    limits:
       memory: 1Gi
+    limits:
+      memory: 1280Mi
