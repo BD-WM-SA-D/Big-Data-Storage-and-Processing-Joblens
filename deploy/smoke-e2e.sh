@@ -13,7 +13,7 @@ echo "### 2/3 Spark: Kafka → bronze.jobs_raw (xử lý hết rồi dừng)"
 bash "${HERE}/spark/submit.sh" bronze_jobs --once
 
 echo "### 3/3 Trino: đọc bronze.jobs_raw"
-COORD=$(kubectl get pod -n serving -l app.kubernetes.io/component=coordinator -o jsonpath='{.items[0].metadata.name}')
+COORD=$(kubectl get pod -n serving -l app.kubernetes.io/component=coordinator --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n serving "$COORD" -- trino --output-format=ALIGNED --execute "
   SELECT source, count(*) AS so_dong, count(DISTINCT source_job_id) AS so_tin, max(ingest_ts) AS lan_nap_cuoi
   FROM iceberg.bronze.jobs_raw GROUP BY source"

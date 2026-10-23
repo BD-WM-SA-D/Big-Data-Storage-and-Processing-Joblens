@@ -22,11 +22,20 @@ kubectl apply -f "${HERE}/mongodb.yaml"
 kubectl rollout status statefulset/mongodb -n "$NS" --timeout=5m
 
 echo "==> User ứng dụng 'joblens'"
-kubectl exec -n "$NS" mongodb-0 -- mongosh --quiet -u root -p "$(val root-password)" --authenticationDatabase admin --eval "
-  const pw = '$(val app-password)';
-  const a = db.getSiblingDB('admin');
-  if (a.getUser('joblens')) { a.updateUser('joblens', {pwd: pw, roles: [{role: 'readWrite', db: 'joblens'}]}); print('   đã cập nhật'); }
-  else { a.createUser({user: 'joblens', pwd: pw, roles: [{role: 'readWrite', db: 'joblens'}]}); print('   đã tạo'); }"
+# Lần khởi động đầu, image mongo chạy một mongod tạm (tạo user root) rồi tự khởi động lại – readiness có thể đạt
+# trong pha tạm đó, nên thử lại vài lần thay vì lỗi ngay (gặp 2026-10-23: ECONNREFUSED 127.0.0.1:27017).
+ok=""
+for _ in $(seq 1 12); do
+  if kubectl exec -n "$NS" mongodb-0 -- mongosh --quiet -u root -p "$(val root-password)" --authenticationDatabase admin --eval "
+    const pw = '$(val app-password)';
+    const a = db.getSiblingDB('admin');
+    if (a.getUser('joblens')) { a.updateUser('joblens', {pwd: pw, roles: [{role: 'readWrite', db: 'joblens'}]}); print('   đã cập nhật'); }
+    else { a.createUser({user: 'joblens', pwd: pw, roles: [{role: 'readWrite', db: 'joblens'}]}); print('   đã tạo'); }"; then
+    ok=1; break
+  fi
+  echo "   MongoDB chưa nhận kết nối – thử lại sau 5 giây"; sleep 5
+done
+[ -n "$ok" ] || { echo "Không tạo được user sau 1 phút – xem: kubectl logs -n $NS mongodb-0"; exit 1; }
 
 URL="mongodb://joblens:$(val app-password)@mongodb.serving.svc.cluster.local:27017/joblens?authSource=admin"
 for ns in compute serving; do

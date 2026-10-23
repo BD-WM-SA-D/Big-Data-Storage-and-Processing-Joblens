@@ -123,6 +123,13 @@ nguyên văn giữa các báo cáo).
   lần nâng cấp (spec Job bất biến).
 - **Điều rút ra:** hiểu vòng đời Helm (hook vs tài nguyên thường) trước khi dùng `--wait` trong script tự động.
 
+### 5.1b. MongoDB "sẵn sàng" nhưng từ chối kết nối (2026-10-23)
+
+- **Vấn đề:** lần cài đầu, tạo user ứng dụng lỗi `ECONNREFUSED 127.0.0.1:27017` dù readiness probe đã đạt. Image mongo
+  chạy một mongod tạm để tạo user root rồi tự khởi động lại – probe đạt đúng trong pha tạm đó.
+- **Giải pháp:** script thử lại 12 lần × 5 giây; chạy lại lần hai thì thành công.
+- **Điều rút ra:** "ready" của Kubernetes chỉ đúng bằng probe; bước khởi tạo phải tự chịu lỗi tạm thời (retry).
+
 ### 5.2. Bộ lọc thời gian của Grafana–Trino lệch múi giờ (2026-10-20)
 
 - **Vấn đề:** ô "tin nạp theo 10 giây" báo *No data* dù bronze tăng. Plugin Trino chèn mốc thời gian dạng `TIMESTAMP '…'`
@@ -137,6 +144,15 @@ nguyên văn giữa các báo cáo).
 - **Điều rút ra:** pin phiên bản *chart* và *ứng dụng* riêng, kiểm tra bản có thật trước khi ghi vào tài liệu.
 
 ## 6. Tối ưu hiệu năng (cache, truy vấn, cấp phát tài nguyên, nút thắt)
+
+### 6.0. Trino khởi động lại giữa lần dbt build (2026-10-23 01:47)
+
+- **Vấn đề:** `dbt_build_gold` lỗi "Connection refused" tới Trino khi seed và mart chạy song song (dbt 2 luồng); pod
+  coordinator bắt đầu lại lúc 01:49. Nguyên nhân không còn xem được (Kubernetes chỉ giữ lần khởi động lại gần nhất), khả
+  năng cao là vượt limit bộ nhớ: limit 1792Mi chỉ hơn heap 1400M khoảng 0,4 GB.
+- **Giải pháp:** limit 2304Mi (chừa ~0,9 GB ngoài heap); dbt trong cụm chạy 1 luồng. Lần chạy sau (21:41): dbt xanh.
+- **Điều rút ra:** limit container của ứng dụng JVM = heap + bộ nhớ ngoài heap; ghi nhận nguyên nhân ngay khi lỗi
+  (`kubectl describe pod … | grep -A4 "Last State"`) trước khi khởi động lại cụm.
 
 ### 6.1. Nạp image vào k3d mất vài phút mỗi lần chạy job
 

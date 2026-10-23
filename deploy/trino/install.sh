@@ -26,6 +26,6 @@ kubectl rollout restart deployment -n "$NS" -l app.kubernetes.io/name=trino >/de
 kubectl rollout status deployment -n "$NS" -l app.kubernetes.io/name=trino --timeout=5m
 
 echo "==> Kiểm tra: SHOW SCHEMAS FROM iceberg"
-COORD=$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=coordinator -o jsonpath='{.items[0].metadata.name}')
+COORD=$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=coordinator --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n "$NS" "$COORD" -- trino --execute "SHOW SCHEMAS FROM iceberg"
 echo "Mở trình duyệt Trino UI: kubectl port-forward -n $NS svc/trino 8080:8080  →  http://localhost:8080 (user bất kỳ)"
