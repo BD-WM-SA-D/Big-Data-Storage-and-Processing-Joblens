@@ -98,12 +98,15 @@ spec:
               path: /api/health
               port: 3000
             periodSeconds: 10
+            timeoutSeconds: 5
+          # 2026-10-23: với limit 384Mi + 50m CPU, Grafana 13 kẹt "0/1 Running" 20+ phút sau khi khởi động lại cụm
+          # (log: "Failed to find organization … context canceled", readiness /api/health không qua) → nới tài nguyên.
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 200m
+              memory: 256Mi
             limits:
-              memory: 384Mi
+              memory: 768Mi
           volumeMounts:
             - name: data
               mountPath: /var/lib/grafana
