@@ -96,6 +96,7 @@ bash deploy/data/replay-vietjobs.sh 3000 50 --late-every 10
 
 Chỉ ra: Kafka UI (*Topics → jobs.raw.vietjobs.v1 → Messages*); Grafana hai ô streaming; log terminal E dòng
 `tiến độ batch …: … bỏ do trễ (watermark) N; watermark …` – tin trễ hơn watermark không được cộng vào cửa sổ đã đóng.
+N đếm theo dòng đã gộp một phần (cửa sổ × tỉnh), không theo từng tin, nên nhỏ hơn số tin trễ đã gửi.
 Đổi `--output-mode append` (chạy lần khác) để thấy cửa sổ chỉ được ghi một lần khi đã đóng.
 
 Replay xong: Ctrl+C ở terminal B và E (chỉ dừng xem log), rồi `bash scripts/demo-mode.sh airflow` – dừng hẳn cả hai
@@ -128,6 +129,7 @@ bash scripts/trino.sh -f scripts/demo-queries.sql   # dự phòng nếu Grafana 
 |---|---|
 | Ô Grafana báo *Plugin not found* | Pod Grafana lần đầu cần Internet để tải plugin Trino: `kubectl logs -n monitoring deploy/grafana \| grep -i plugin`; có mạng rồi `kubectl rollout restart -n monitoring deploy/grafana` |
 | Ô Grafana báo *Table … does not exist* | Chưa chạy bước dữ liệu tương ứng (silver, `dbt.sh build`, DAG cho `analytics_*`, job cửa sổ cho `province_windows`) |
+| Ô cửa sổ 5 phút báo *Column 'window_start' cannot be resolved* | Trino đã lưu lược đồ đoán từ collection rỗng. Job `stream_province_windows` tự ghi lại lược đồ khi khởi động – chạy lại job; hoặc xóa mục `province_windows` trong collection `_schema` của MongoDB (`db.getCollection("_schema")`) |
 | Ô MongoDB báo *Catalog 'mongodb' does not exist* | Chưa chạy `deploy/mongodb/install.sh` rồi `deploy/trino/install.sh` |
 | Task Airflow đứng ở *queued* lâu | DAG đang tạm dừng/scheduler tắt (chế độ streaming): `bash scripts/demo-mode.sh airflow` |
 | Pod `Pending`, `OOMKilled`, máy chậm | Thiếu RAM: `bash scripts/demo-mode.sh status`; dừng streaming trước khi chạy DAG |

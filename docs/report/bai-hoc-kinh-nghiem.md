@@ -45,7 +45,11 @@ nguyên văn giữa các báo cáo).
 - **Đã thử:** đếm theo `ingest_ts` – đơn giản nhưng sai ngữ nghĩa; không giới hạn độ trễ – state lớn mãi.
 - **Giải pháp:** `stream_province_windows.py` dùng event time `crawl_ts` + watermark 10 phút; tin trễ hơn bị bỏ và được đếm
   (`numRowsDroppedByWatermark`). Kiểm thử trên luồng thật (file source) trong `tests/test_stream_province_windows.py`.
-  Trên cụm: `<cần đo>` với `replay-vietjobs.sh --late-every 10`.
+  Trên cụm (2026-10-24, `replay-vietjobs.sh 3000 50 --late-every 10`: 3.000 tin, 1/10 lùi `crawl_ts` 20 phút): watermark
+  luôn bằng `crawl_ts` lớn nhất trừ 10 phút (10:54:21 → 10:55:16 UTC), các batch có tin trễ báo bỏ 8, 4 và 7 dòng; state tăng
+  từ 31 lên 57 dòng khi mở cửa sổ mới. Số "bỏ" đếm sau bước gộp một phần – theo (cửa sổ, tỉnh), không theo từng tin –
+  nên nhỏ hơn nhiều so với ~300 tin trễ đã gửi. Log lần này thiếu batch 1, 3, 6 (job chỉ in batch mới nhất mỗi 15 giây,
+  đã sửa để in mọi batch), nên tổng số dòng bị bỏ của cả lượt chưa đầy đủ.
 - **Điều rút ra:** watermark là đánh đổi giữa độ đầy đủ và kích thước state – phải chọn theo độ trễ thực tế của nguồn.
 
 ## 2. Xử lý dữ liệu với Spark (tối ưu job, bộ nhớ, partition)

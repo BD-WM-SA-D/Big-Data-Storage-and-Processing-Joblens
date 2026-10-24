@@ -163,3 +163,10 @@ def test_trino_schema_covers_document_fields():
     schema = S.trino_schema_doc()
     assert schema["table"] == S.COLLECTION
     assert {f["name"] for f in schema["fields"]} == set(doc)
+
+
+def test_new_progress_returns_every_unlogged_batch():
+    recent = [{"batchId": i} for i in range(1, 8)]
+    assert [p["batchId"] for p in S.new_progress(recent, 4)] == [5, 6, 7]
+    assert len(S.new_progress(recent, None)) == 7
+    assert S.new_progress(recent, 7) == []

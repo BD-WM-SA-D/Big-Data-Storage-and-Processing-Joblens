@@ -37,9 +37,9 @@ Trạng thái (cập nhật 2026-10-23 sau lần chạy DAG đầy đủ – s�
 | | Cache / persist | ✅ | `bronze_jobs.py` (persist mỗi micro-batch); `analytics_spark.py` |
 | | Phân tích kế hoạch thực thi | ✅ | `analytics_spark.plan_text` → `s3://joblens/reports/spark-plans/` + cờ `plan_checks` trên Grafana |
 | Streaming | Structured Streaming | ✅ | `bronze_jobs.py`, `stream_province_windows.py` |
-| | Output modes | 🧪 | `stream_province_windows.py --output-mode update\|append` |
-| | Watermark, dữ liệu trễ | 🧪 | `stream_province_windows.py` (watermark 10 phút); replay `--late-every` tạo tin trễ; kiểm thử `tests/test_stream_province_windows.py` |
-| | Quản lý state | 🧪 | aggregation theo cửa sổ (state trong checkpoint, log `numRowsTotal`) |
+| | Output modes | 🧪 | `stream_province_windows.py --output-mode update\|append` (đã chạy `update` trên cụm; `append` chưa chạy) |
+| | Watermark, dữ liệu trễ | ✅ | `stream_province_windows.py` (watermark 10 phút); replay `--late-every` tạo tin trễ; kiểm thử `tests/test_stream_province_windows.py` |
+| | Quản lý state | ✅ | aggregation theo cửa sổ (state trong checkpoint, log `numRowsTotal`) |
 | | Exactly-once | ✅ | checkpoint Kafka offset + commit Iceberg (bronze); upsert idempotent theo `_id` (MongoDB) |
 | Phân tích nâng cao | Spark MLlib | ✅ | `analytics_spark.salary_model` – Pipeline + CrossValidator, so với mô hình đoán trung vị |
 | | Thống kê, chuỗi thời gian | ✅ | tương quan kinh nghiệm–lương, phân vị; lượng nạp theo giờ |

@@ -164,19 +164,25 @@ def mongo_writer(url: str, collection: str = COLLECTION):
     return write
 
 
-def log_progress(query) -> None:
-    p = query.lastProgress
-    if not p:
-        return
-    for op in p.get("stateOperators", []):
+def log_progress(progress: dict) -> None:
+    """In một dòng cho mỗi stateful operator của một micro-batch.
+
+    numRowsDroppedByWatermark đếm dòng ở đầu vào của phép gộp có state – sau bước gộp một phần, tức là theo
+    (cửa sổ, tỉnh) chứ không theo từng tin."""
+    for op in progress.get("stateOperators", []):
         log.info(
             "tiến độ batch %s: vào %s dòng; state %s dòng; bỏ do trễ (watermark) %s; watermark %s",
-            p.get("batchId"),
-            p.get("numInputRows"),
+            progress.get("batchId"),
+            progress.get("numInputRows"),
             op.get("numRowsTotal"),
             op.get("numRowsDroppedByWatermark"),
-            p.get("eventTime", {}).get("watermark"),
+            progress.get("eventTime", {}).get("watermark"),
         )
+
+
+def new_progress(recent: list[dict], last: int | None) -> list[dict]:
+    """Các bản tiến độ có batchId > last (recentProgress giữ vài batch gần nhất; một vòng chờ có thể qua nhiều batch)."""
+    return [p for p in recent if last is None or p.get("batchId", -1) > last]
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -231,9 +237,9 @@ def main(argv: list[str] | None = None) -> None:
     last = None
     while query.isActive:
         query.awaitTermination(15)
-        if query.lastProgress and query.lastProgress.get("batchId") != last:
-            log_progress(query)
-            last = query.lastProgress.get("batchId")
+        for prog in new_progress(query.recentProgress, last):
+            log_progress(prog)
+            last = prog.get("batchId")
     if query.exception():
         raise query.exception()
 
