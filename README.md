@@ -23,16 +23,22 @@ Nền tảng lakehouse của dự án JobLens VN: Kafka → Spark (batch + Struc
 
 ## Chạy nhanh (không cần các repo khác)
 
+Cần Docker, k3d, kubectl, Helm, uv (danh sách và phiên bản: [`deploy/README.md`](deploy/README.md)). Máy 16 GB
+dùng profile mặc định; máy 8 GB đặt `JOBLENS_PROFILE=lite`; không có máy đủ RAM thì dùng GitHub Codespaces
+([`docs/cloud-codespaces.md`](docs/cloud-codespaces.md)).
+
 ```bash
-# 1. Cài hợp đồng dữ liệu (pin version)
-pip install git+https://github.com/BD-WM-SA-D/joblens@v<x.y.z>
-
-# 2. Cấu hình
+uv sync                              # môi trường Python (pyspark, dbt-trino, GX, kiểm thử)
 cp .env.example .env
-
-# 3. Chạy với dữ liệu mẫu (fixtures thay cho crawler thật, image mô hình thay bằng stub)
-<lệnh chạy>
+bash scripts/bootstrap-all.sh        # dựng cụm + Kafka, S3, Iceberg, MongoDB, Trino, nạp VietJobs, silver, gold,
+                                     # Grafana, Airflow (~30–40 phút lần đầu; chạy lại an toàn)
+bash scripts/demo-ui.sh              # mở Grafana :3000, Kafka UI :8081, Airflow :8082, Trino :8080 …
+bash scripts/trino.sh -f scripts/demo-queries.sql   # kiểm tra dữ liệu bronze/silver/gold
+uv run pytest -q                     # kiểm thử (Spark local)
 ```
+
+Không cần crawler: dữ liệu vào từ VietJobs (`deploy/data/`) và fixtures của repo `joblens`. Kiến trúc và mô tả dữ
+liệu: [`docs/kien-truc.md`](docs/kien-truc.md). Kịch bản demo: [`docs/demo.md`](docs/demo.md).
 
 ## Cấu trúc thư mục
 
@@ -40,14 +46,16 @@ cp .env.example .env
 deploy/            Helm values, manifest K8s, cấu hình k3d – nơi DUY NHẤT ghép toàn hệ thống
 deploy/compat.md   bảng phiên bản platform × mining × app × contracts của mỗi lần chạy
 deploy/monitoring/dashboards/   dashboard Grafana export JSON
-spark-jobs/        streaming bronze, batch backfill, silver jobs, compaction
+spark-jobs/        streaming bronze, nạp VietJobs, silver, streaming có state → MongoDB, phân tích + MLlib,
+                   kiểm tra GX (gx_silver.py), bảo trì Iceberg
 dbt/               gold marts + dbt tests
-gx/                Great Expectations suites
-airflow/dags/      DAG điều phối (fail-on-error)
-event-generator/   luồng sự kiện synthetic (events.user.v1)
-benchmarks/        batch vs streaming, Trino p95, consumer lag…
-docs/              nguồn báo cáo Big Data
-docs/adr/          ADR (Lambda/Kappa, catalog, object storage)
+airflow/dags/      DAG điều phối joblens_pipeline (fail-on-error)
+scripts/           bootstrap, giao diện demo, thao tác dữ liệu demo, Trino, dbt, thí nghiệm batch vs streaming
+benchmarks/        bảng số liệu cuối (batch vs streaming, Spark analytics)
+tests/             pytest (Spark local, DAG Airflow)
+docs/              nguồn báo cáo Big Data: kiến trúc, demo, đối chiếu yêu cầu môn, bài học kinh nghiệm
+docs/adr/          ADR (Lambda/Kappa)
+gx/, event-generator/   chưa dùng (GX chạy trong spark-jobs/gx_silver.py; event-generator chưa làm)
 ```
 
 ## Tài liệu

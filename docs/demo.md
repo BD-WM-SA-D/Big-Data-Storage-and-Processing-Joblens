@@ -9,6 +9,21 @@ tảng tự dựng, và **mỗi yêu cầu của bài tập lớn** được đ�
 > Số liệu nói trong buổi demo phải là số đo thật từ lần chạy hôm đó (quy tắc repo: không bịa số đo).
 > Ghi lại vào `deploy/compat.md` sau khi chạy.
 
+## Checkpoint 26/10 – yêu cầu và cách trình bày (~10 phút)
+
+Yêu cầu giảng viên: *git có mã chạy được, dữ liệu và kiến trúc hệ thống đã sẵn sàng*.
+
+| Yêu cầu | Cho xem gì |
+|---|---|
+| Git có mã chạy được | GitHub repo: `README.md` (mục *Chạy nhanh*), lịch sử commit; terminal: `uv run pytest -q` (hoặc kết quả chạy trước), `kubectl get pods -A` – hệ thống đang chạy từ chính mã trong repo |
+| Kiến trúc | [`kien-truc.md`](kien-truc.md) mục 2–3 (sơ đồ luồng + triển khai, GitHub vẽ sẵn Mermaid); ADR Lambda/Kappa; `k9s` hoặc `kubectl get pods -A` theo namespace |
+| Dữ liệu | [`kien-truc.md`](kien-truc.md) mục 4 (nguồn, các tầng, số liệu); Grafana (số dòng bronze/silver, tỉ lệ chuẩn hóa); SeaweedFS (file Parquet + metadata Iceberg); `bash scripts/trino.sh -f scripts/demo-queries.sql` |
+| Nếu được hỏi "thêm/sửa/xóa dữ liệu thử" | `bash scripts/demo-data.sh sql` (Iceberg), `nosql` (MongoDB), `kafka "<tiêu đề>" "<lương>" "<tỉnh>"` (một tin đi hết pipeline) – mục 3.4 |
+
+Thứ tự gợi ý: kiến trúc (2 phút) → dữ liệu trên Grafana + Trino (3 phút) → streaming ngắn: replay 1.000 tin, ô bronze
+và cửa sổ tỉnh tăng (3 phút) → DAG Airflow đã chạy xanh (1 phút) → việc còn lại (1 phút). Chạy thử
+`demo-data.sh sql`, `nosql`, `kafka` một lần trước buổi (rồi `clean`) để chắc chạy được trên máy mình.
+
 ## 0. Giao diện dùng trong buổi demo
 
 Tất cả mở bằng một lệnh `bash scripts/demo-ui.sh` (port-forward ra `localhost`; trên Codespaces mở ở tab PORTS):
@@ -115,6 +130,23 @@ Bấm ô task → *Logs*. Nếu giao diện không đọc được log (schedule
 bash scripts/trino.sh "SELECT count(*) FROM iceberg.silver.job_postings FOR VERSION AS OF <snapshot_id>"
 bash scripts/trino.sh -f scripts/demo-queries.sql   # dự phòng nếu Grafana lỗi
 ```
+
+### 3.4. Thao tác dữ liệu tại chỗ (khi được hỏi)
+
+`scripts/demo-data.sh` in từng câu lệnh rồi dừng chờ Enter để giải thích. Chỉ ghi vào chỗ dành cho demo
+(namespace Iceberg `sandbox`, collection `sandbox_jobs`, tin `source = synthetic` có mã `demo-…`).
+
+```bash
+bash scripts/demo-data.sh sql      # CTAS → INSERT → UPDATE → DELETE → snapshot → time travel (Trino trên Iceberg)
+bash scripts/demo-data.sh nosql    # insertMany → find → updateOne → deleteOne → aggregate → Trino join MongoDB × Iceberg
+bash scripts/demo-data.sh kafka "Kỹ sư dữ liệu (tin demo)" "15 - 25 triệu" "Đà Nẵng"
+                                   # Kafka → bronze → silver: thấy lương, mã tỉnh, cấp bậc được chuẩn hóa (~3–5 phút)
+bash scripts/demo-data.sh clean    # dọn sau buổi demo
+```
+
+Lệnh `kafka` tự chạy `bronze_jobs --once` nếu job streaming không chạy, rồi chạy `silver_job_postings` – chạy ở chế độ
+Airflow (`demo-mode.sh airflow`) cũng được vì không có job streaming nào chạy cùng. Tin demo không vào gold (dbt bỏ
+tin synthetic).
 
 ## 4. Phương án dự phòng
 

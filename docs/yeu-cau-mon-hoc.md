@@ -50,6 +50,6 @@ Trạng thái (cập nhật 2026-10-23 sau lần chạy DAG đầy đủ – s�
 | Phần | Trạng thái | Nguồn |
 |---|---|---|
 | 1. Định nghĩa bài toán | ⬜ | `joblens/docs/project-plan/01`, EDA VietJobs |
-| 2. Kiến trúc và thiết kế (Lambda/Kappa, sơ đồ luồng) | 🧪 | `docs/adr/0001-lambda-vs-kappa.md`, `joblens/docs/project-plan/03` |
+| 2. Kiến trúc và thiết kế (Lambda/Kappa, sơ đồ luồng) | 🧪 | `docs/kien-truc.md` (sơ đồ luồng, triển khai, dữ liệu), `docs/adr/0001-lambda-vs-kappa.md` |
 | 3. Chi tiết triển khai (mã, cấu hình theo môi trường, triển khai, giám sát) | ✅ | `deploy/README.md` (profile full/lite, Codespaces), `deploy/compat.md`, Grafana |
 | 4. Bài học kinh nghiệm – 11 nhóm, mẫu 4 phần | 🧪 (bản nháp) | `docs/report/bai-hoc-kinh-nghiem.md` |
