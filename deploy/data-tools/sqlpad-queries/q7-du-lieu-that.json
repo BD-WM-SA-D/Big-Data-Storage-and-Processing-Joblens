@@ -1,0 +1,13 @@
+{
+  "id": "q7-du-lieu-that",
+  "name": "7. Xem dữ liệu thật (chỉ đọc)",
+  "connectionId": "trino",
+  "queryText": "SELECT source, count(*) AS so_tin,\n       round(avg(CAST(cardinality(location_codes) > 0 AS INT)), 3) AS ti_le_co_dia_diem\nFROM iceberg.silver.job_postings GROUP BY 1;\nSELECT d.name AS tinh_thanh, m.job_count AS so_tin, m.salary_median_vnd / 1e6 AS trung_vi_trieu\nFROM iceberg.gold.mart_salary_role_region m JOIN iceberg.gold.dim_location d USING (location_code)\nWHERE m.category_source = 'ALL' AND m.level_code = 'ALL' ORDER BY m.job_count DESC LIMIT 10;\nSELECT * FROM mongodb.joblens.analytics_salary_by_province LIMIT 10;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

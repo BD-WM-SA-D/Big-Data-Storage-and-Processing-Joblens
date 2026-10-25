@@ -1,0 +1,13 @@
+{
+  "id": "q8-don-dep",
+  "name": "8. Dọn dẹp dữ liệu thử",
+  "connectionId": "trino",
+  "queryText": "DROP TABLE IF EXISTS iceberg.sandbox.web_jobs;\nDROP TABLE IF EXISTS mongodb.joblens.web_notes;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

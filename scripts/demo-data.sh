@@ -161,6 +161,8 @@ PY
 clean() {
   title "Xóa dữ liệu demo"
   q "DROP TABLE IF EXISTS $T"
+  q "DROP TABLE IF EXISTS iceberg.sandbox.web_jobs"       # bảng thử của SQLPad (deploy/data-tools)
+  q "DROP TABLE IF EXISTS mongodb.joblens.web_notes"      # collection thử của SQLPad
   q "DROP SCHEMA IF EXISTS iceberg.sandbox"
   m 'db.sandbox_jobs.drop()'
   m 'db.getCollection("_schema").deleteOne({table: "sandbox_jobs"})'

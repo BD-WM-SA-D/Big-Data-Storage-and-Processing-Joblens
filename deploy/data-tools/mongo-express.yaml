@@ -1,0 +1,65 @@
+# mongo-express 1.0.2 – xem và sửa document MongoDB trên trình duyệt (thêm, sửa, xóa document; chạy bộ lọc).
+# Dùng khi cần thao tác NoSQL mà không mở terminal (docs/tap-duot-demo.md mục 5b).
+# Kết nối bằng user ứng dụng "joblens" (Secret joblens-mongo, quyền readWrite chỉ trên database joblens) –
+# không dùng tài khoản root. Đăng nhập giao diện: user admin + mật khẩu trong Secret mongo-express-auth.
+# Ghi chú: image chính thức mongo-express đã ngừng cập nhật (bản cuối 2024) – đủ cho dev/demo.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongo-express
+  namespace: serving
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongo-express
+  template:
+    metadata:
+      labels:
+        app: mongo-express
+    spec:
+      containers:
+        - name: mongo-express
+          image: mongo-express:1.0.2-20-alpine3.19
+          ports:
+            - containerPort: 8081
+          env:
+            - name: ME_CONFIG_MONGODB_URL
+              valueFrom:
+                secretKeyRef: {name: joblens-mongo, key: JOBLENS_MONGO_URL}
+            - name: ME_CONFIG_MONGODB_ENABLE_ADMIN
+              value: "false"
+            - name: ME_CONFIG_BASICAUTH
+              value: "true"
+            - name: ME_CONFIG_BASICAUTH_USERNAME
+              value: admin
+            - name: ME_CONFIG_BASICAUTH_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: mongo-express-auth, key: password}
+            - name: ME_CONFIG_SITE_SESSIONSECRET
+              valueFrom:
+                secretKeyRef: {name: mongo-express-auth, key: session-secret}
+            - name: ME_CONFIG_SITE_COOKIESECRET
+              valueFrom:
+                secretKeyRef: {name: mongo-express-auth, key: session-secret}
+            - name: ME_CONFIG_CONNECT_RETRIES
+              value: "30"
+          readinessProbe:
+            tcpSocket: {port: 8081}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 20m, memory: 64Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo-express
+  namespace: serving
+spec:
+  selector:
+    app: mongo-express
+  ports:
+    - port: 8081
+      targetPort: 8081

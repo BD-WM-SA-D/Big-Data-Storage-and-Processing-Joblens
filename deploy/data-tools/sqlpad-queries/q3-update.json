@@ -1,0 +1,13 @@
+{
+  "id": "q3-update",
+  "name": "3. Iceberg – sửa (UPDATE)",
+  "connectionId": "trino",
+  "queryText": "UPDATE iceberg.sandbox.web_jobs SET salary_max_vnd = 35000000 WHERE job_id = 'web-1';\nSELECT * FROM iceberg.sandbox.web_jobs ORDER BY job_id;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

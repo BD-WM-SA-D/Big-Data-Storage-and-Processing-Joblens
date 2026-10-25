@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mở tất cả giao diện web của nền tảng cho buổi demo (port-forward từ cụm k3d ra localhost).
 # Từ WSL, trình duyệt Windows mở được thẳng http://localhost:<cổng>.
-#   bash scripts/demo-ui.sh          # Grafana, Kafka UI, Airflow, Trino, Lakekeeper, SeaweedFS – giữ terminal mở
+#   bash scripts/demo-ui.sh          # Grafana, Kafka UI, Airflow, Trino, Lakekeeper, SeaweedFS, SQLPad, mongo-express – giữ terminal mở
 #   bash scripts/demo-ui.sh spark    # Spark UI của driver mới nhất (job streaming hoặc task Airflow), cổng 4040
 # Ctrl+C để đóng mọi port-forward. Dịch vụ nào chưa cài thì bỏ qua.
 set -uo pipefail
@@ -44,8 +44,11 @@ forward orchestration airflow-api-server 8082 8080 "Airflow" "/dags/joblens_pipe
 forward serving    trino              8080 8080 "Trino"      "/ui/"
 forward lakehouse  lakekeeper         8181 8181 "Lakekeeper" "/ui/"
 forward lakehouse  seaweedfs-all-in-one 8888 8888 "SeaweedFS" "/buckets/joblens/"
+forward serving    sqlpad             3001 3000 "SQLPad"     "/"
+forward serving    mongo-express      8083 8081 "Mongo Express" "/db/joblens/"
 echo
 echo "Mật khẩu: Grafana admin = kubectl get secret grafana-admin -n monitoring -o jsonpath='{.data.password}' | base64 -d"
 echo "          Airflow admin = kubectl get secret airflow-admin -n orchestration -o jsonpath='{.data.password}' | base64 -d"
 echo "          Trino: nhập user bất kỳ (dev không bật xác thực)"
+echo "          SQLPad (admin@joblens.local), mongo-express (admin): bash deploy/data-tools/install.sh in lại mật khẩu"
 wait

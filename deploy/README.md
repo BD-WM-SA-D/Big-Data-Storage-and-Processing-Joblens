@@ -20,6 +20,7 @@ Dựng tất cả một lần (máy mới, GitHub Codespaces – [`docs/cloud-co
 | 8 | `bash scripts/dbt.sh build` | `serving` (Trino) | Seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 12 test dữ liệu |
 | 9 | `bash deploy/monitoring/install.sh` | `monitoring` | Grafana 13.2.4 + plugin Trino 1.4.1 + dashboard `dashboards/joblens-demo.json`; Kafka UI v1.5.0 (chỉ đọc) |
 | 10 | `bash deploy/airflow/install.sh` | `orchestration` | Postgres 17.6 + Airflow 3.3.2 (chart 1.22.0, LocalExecutor), DAG `joblens_pipeline`: silver → GX → dbt gold + bảo trì Iceberg; build image `joblens/dbt` |
+| 11 | `bash deploy/data-tools/install.sh` | `serving` | SQLPad 7.5.7 (SQL qua Trino trên trình duyệt, 8 câu mẫu) + mongo-express 1.0.2 (sửa document MongoDB) – tùy chọn, cho demo sửa dữ liệu không cần terminal |
 
 Kịch bản demo môn học: [`docs/demo.md`](../docs/demo.md). Mở mọi giao diện web: `bash scripts/demo-ui.sh`. Truy vấn nhanh: `bash scripts/trino.sh "SELECT …"`.
 

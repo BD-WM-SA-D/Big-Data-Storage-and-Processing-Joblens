@@ -30,5 +30,6 @@ fi
 
 step "9. Grafana + Kafka UI";   bash deploy/monitoring/install.sh
 step "10. Airflow";             bash deploy/airflow/install.sh
+step "11. SQLPad + mongo-express (sửa dữ liệu trên trình duyệt)"; bash deploy/data-tools/install.sh
 step "Xong"
 echo "Mở giao diện: bash scripts/demo-ui.sh   (Codespaces: tab PORTS → mở cổng 3000, 8082 …)"

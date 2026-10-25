@@ -126,3 +126,12 @@ Chất lượng: GX 15 kỳ vọng trên silver (không trùng `job_uid`, mã tr
 | `nosql` | MongoDB: insertMany (document lồng mảng), find, updateOne (`$inc`, `$push`), deleteOne, aggregate; Trino đọc collection và join với bảng Iceberg |
 | `kafka "<tiêu đề>" "<lương>" "<tỉnh>"` | Một tin mới đi hết pipeline: Kafka → bronze (streaming) → silver (chuẩn hóa) – ví dụ `"20 - 30 triệu"` → 20.000.000–30.000.000 VND, `"Hà Nội"` → mã `01` |
 | `clean` | Xóa mọi thứ ba lệnh trên tạo ra (bảng `sandbox`, collection `sandbox_jobs`, tin `demo-…`) |
+
+Không theo kịch bản:
+
+| Cách | Công cụ | Làm được |
+|---|---|---|
+| Terminal | `bash scripts/trino.sh` (không tham số) | Phiên Trino tương tác: mọi câu SQL trên catalog `iceberg` và `mongodb` |
+| Terminal | `bash scripts/mongo.sh` | mongosh vào database `joblens` bằng user ứng dụng |
+| Trình duyệt | SQLPad 7.5.7 (`deploy/data-tools/`, cổng 3001) | Soạn/chạy SQL qua Trino; Iceberg: INSERT/UPDATE/DELETE, time travel; MongoDB: INSERT/DELETE (connector không hỗ trợ UPDATE) |
+| Trình duyệt | mongo-express 1.0.2 (`deploy/data-tools/`, cổng 8083) | Thêm/sửa/xóa document trong database `joblens` |

@@ -1,0 +1,13 @@
+{
+  "id": "q5-time-travel",
+  "name": "5. Iceberg – lịch sử snapshot và time travel",
+  "connectionId": "trino",
+  "queryText": "-- Mỗi INSERT/UPDATE/DELETE là một snapshot mới.\n-- Time travel: chép một snapshot_id ở bảng kết quả, rồi chạy riêng (gõ ở ô mới hoặc bôi đen câu rồi Run):\n--   SELECT * FROM iceberg.sandbox.web_jobs FOR VERSION AS OF <snapshot_id>\nSELECT snapshot_id, committed_at, operation,\n       element_at(summary, 'added-records') AS them, element_at(summary, 'deleted-records') AS xoa\nFROM iceberg.sandbox.\"web_jobs$snapshots\" ORDER BY committed_at;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

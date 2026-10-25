@@ -1,0 +1,13 @@
+{
+  "id": "q1-tao-bang",
+  "name": "1. Iceberg – tạo bảng thử (chạy một lần)",
+  "connectionId": "trino",
+  "queryText": "-- Bảng Iceberg riêng cho thử nghiệm trên trình duyệt (namespace sandbox). Không đụng bảng bronze/silver/gold.\nCREATE SCHEMA IF NOT EXISTS iceberg.sandbox;\nCREATE TABLE IF NOT EXISTS iceberg.sandbox.web_jobs (\n  job_id varchar, title varchar, location_code varchar, level_code varchar,\n  salary_min_vnd bigint, salary_max_vnd bigint\n) WITH (partitioning = ARRAY['level_code']);\nSELECT * FROM iceberg.sandbox.web_jobs;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

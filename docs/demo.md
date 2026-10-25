@@ -145,6 +145,11 @@ bash scripts/demo-data.sh kafka "Kỹ sư dữ liệu (tin demo)" "15 - 25 tri�
 bash scripts/demo-data.sh clean    # dọn sau buổi demo
 ```
 
+Không theo kịch bản: `bash scripts/trino.sh` (gõ SQL tự do), `bash scripts/mongo.sh` (mongosh), hoặc trên trình
+duyệt không cần terminal: **SQLPad** http://localhost:3001 (SQL qua Trino, có 8 câu mẫu) và **Mongo Express**
+http://localhost:8083 (thêm/sửa/xóa document) – cài bằng `bash deploy/data-tools/install.sh`. Từng bước:
+[`tap-duot-demo.md`](tap-duot-demo.md) mục 5b, 5c.
+
 Lệnh `kafka` tự chạy `bronze_jobs --once` nếu job streaming không chạy, rồi chạy `silver_job_postings` – chạy ở chế độ
 Airflow (`demo-mode.sh airflow`) cũng được vì không có job streaming nào chạy cùng. Tin demo không vào gold (dbt bỏ
 tin synthetic).

@@ -1,0 +1,80 @@
+# SQLPad 7.5.7 – trình soạn SQL trên trình duyệt, chạy câu lệnh qua Trino (catalog iceberg + mongodb).
+# Dùng khi cần thêm/sửa/xóa dữ liệu mà không mở terminal (docs/tap-duot-demo.md mục 5b).
+# Ghi chú: dự án SQLPad đã lưu trữ (archived) từ 2025 – đủ cho môi trường dev/demo, không dùng cho hệ thống thật.
+# Kết nối "trino" khai báo bằng biến môi trường; các câu lệnh mẫu nạp từ ConfigMap sqlpad-queries (install.sh).
+# Không bật xác thực Trino (dev) – chỉ mở qua port-forward (scripts/demo-ui.sh), đăng nhập SQLPad bằng mật khẩu
+# trong Secret sqlpad-admin.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sqlpad
+  namespace: serving
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sqlpad
+  template:
+    metadata:
+      labels:
+        app: sqlpad
+    spec:
+      containers:
+        - name: sqlpad
+          image: sqlpad/sqlpad:7.5.7
+          ports:
+            - containerPort: 3000
+          env:
+            - name: SQLPAD_ADMIN
+              value: admin@joblens.local
+            - name: SQLPAD_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: sqlpad-admin, key: password}
+            - name: SQLPAD_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef: {name: sqlpad-admin, key: cookie-secret}
+            - name: SQLPAD_SEED_DATA_PATH
+              value: /etc/sqlpad/seed-data
+            - name: SQLPAD_DEFAULT_CONNECTION_ID
+              value: trino
+            - name: SQLPAD_QUERY_RESULT_MAX_ROWS
+              value: "1000"
+            - name: SQLPAD_CONNECTIONS__trino__name
+              value: "Trino (iceberg + mongodb)"
+            - name: SQLPAD_CONNECTIONS__trino__driver
+              value: trino
+            - name: SQLPAD_CONNECTIONS__trino__host
+              value: trino.serving.svc.cluster.local
+            - name: SQLPAD_CONNECTIONS__trino__port
+              value: "8080"
+            - name: SQLPAD_CONNECTIONS__trino__username
+              value: sqlpad
+            - name: SQLPAD_CONNECTIONS__trino__catalog
+              value: iceberg
+          readinessProbe:
+            httpGet: {path: /, port: 3000}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 128Mi}
+            limits: {memory: 384Mi}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/sqlpad}
+            - {name: queries, mountPath: /etc/sqlpad/seed-data/queries}
+      volumes:
+        - name: data
+          emptyDir: {}   # lịch sử truy vấn mất khi pod khởi động lại – câu mẫu nạp lại từ ConfigMap
+        - name: queries
+          configMap: {name: sqlpad-queries}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sqlpad
+  namespace: serving
+spec:
+  selector:
+    app: sqlpad
+  ports:
+    - port: 3000
+      targetPort: 3000

@@ -1,0 +1,13 @@
+{
+  "id": "q4-delete",
+  "name": "4. Iceberg – xóa (DELETE)",
+  "connectionId": "trino",
+  "queryText": "DELETE FROM iceberg.sandbox.web_jobs WHERE job_id = 'web-1';\nSELECT count(*) AS so_dong_con_lai FROM iceberg.sandbox.web_jobs;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

@@ -15,7 +15,7 @@ Thời gian: lần đầu ~60 phút (gồm chờ cụm khởi động và DAG ch
   ```
 - **Trình duyệt mở trên Windows** (Chrome/Edge), địa chỉ `http://localhost:…` dùng được trực tiếp.
 - Ký hiệu: 🟦 **T1**, 🟩 **T2**, 🟨 **T3**, 🟥 **T4** = terminal Ubuntu số 1–4. ✅ = đầu ra nghĩa là thành công.
-- Không dán mật khẩu (Grafana, Airflow, MongoDB) vào nhóm chat hay ảnh chụp màn hình.
+- Không dán mật khẩu (Grafana, Airflow, MongoDB, SQLPad, Mongo Express) vào nhóm chat hay ảnh chụp màn hình.
 
 Máy mới chưa có cụm: làm mục 8 trước. Không đủ RAM (dưới 16 GB): dùng `JOBLENS_PROFILE=lite` hoặc GitHub
 Codespaces ([`cloud-codespaces.md`](cloud-codespaces.md)).
@@ -68,7 +68,11 @@ Giao diện demo (Ctrl+C để đóng):
   Trino        http://localhost:8080/ui/
   Lakekeeper   http://localhost:8181/ui/
   SeaweedFS    http://localhost:8888/buckets/joblens/
+  SQLPad       http://localhost:3001/
+  Mongo Express http://localhost:8083/db/joblens/
 ```
+
+Hai dòng SQLPad, Mongo Express hiện `(chưa cài …)` nếu chưa chạy `bash deploy/data-tools/install.sh` (mục 5c).
 
 Mở từng địa chỉ trên trình duyệt. ✅ Grafana hiện dashboard *JobLens – Big Data demo*, các ô số ở hàng đầu có giá
 trị (silver ~48,1K, bronze ~74K). Grafana trắng hoặc *Unable to find application file*: đợi 1 phút rồi tải lại trang.
@@ -167,6 +171,73 @@ Mỗi lệnh in câu lệnh màu vàng (`trino>` / `mongo>`) rồi dừng ở `�
    kế tiếp`, rồi bảng 1 dòng (`synthetic | demo-…`). Bước 3: job silver chạy, kết thúc bằng `==> Xong: silver-job-postings-…`,
    rồi bảng 1 dòng: `salary_min_vnd` **15000000**, `salary_max_vnd` **25000000**, `location_codes` **[48]** (Đà Nẵng),
    `experience_min_years` 2.0, `level_code` **mid**.
+
+## 5b. Tự gõ lệnh trong terminal (🟥 T4)
+
+Không theo kịch bản: mở phiên tương tác rồi gõ câu lệnh bất kỳ (khi giảng viên muốn tự thử).
+
+1. Trino (SQL trên Iceberg và MongoDB):
+   ```bash
+   bash scripts/trino.sh
+   ```
+   ✅ Dấu nhắc `trino>`. Gõ thử (mỗi câu kết thúc bằng `;`):
+   ```sql
+   CREATE SCHEMA IF NOT EXISTS iceberg.sandbox;
+   CREATE TABLE IF NOT EXISTS sandbox.tu_go (id varchar, ten varchar, luong bigint);
+   INSERT INTO sandbox.tu_go VALUES ('a', 'Tin gõ tay', 15000000);
+   UPDATE sandbox.tu_go SET luong = 18000000 WHERE id = 'a';
+   SELECT * FROM sandbox.tu_go;
+   DELETE FROM sandbox.tu_go WHERE id = 'a';
+   DROP TABLE sandbox.tu_go;
+   ```
+   ✅ Lần lượt `CREATE SCHEMA`, `CREATE TABLE`, `INSERT: 1 row`, `UPDATE: 1 row`, bảng có `luong` 18000000,
+   `DELETE: 1 row`, `DROP TABLE`. Thoát: `quit`.
+2. MongoDB shell:
+   ```bash
+   bash scripts/mongo.sh
+   ```
+   ✅ Dấu nhắc có tên database `joblens`. Gõ thử:
+   ```js
+   show collections
+   db.tu_go.insertOne({_id: "a", ten: "Tin gõ tay", luong: 15000000, ky_nang: ["SQL"]})
+   db.tu_go.updateOne({_id: "a"}, {$set: {luong: 18000000}, $push: {ky_nang: "Spark"}})
+   db.tu_go.find()
+   db.tu_go.deleteOne({_id: "a"})
+   db.tu_go.drop()
+   ```
+   ✅ `insertedId: 'a'`, `matchedCount: 1, modifiedCount: 1`, document có `luong: 18000000` và 2 kỹ năng,
+   `deletedCount: 1`, `true`. Thoát: `exit`.
+
+Không sửa collection/bảng do pipeline ghi (`province_windows`, `analytics_*`, bronze/silver/gold) – job sẽ ghi đè,
+và đó là dữ liệu dùng cho báo cáo. Thử nghiệm trên bảng/collection riêng như trên.
+
+## 5c. Sửa dữ liệu trên trình duyệt – không cần terminal
+
+**Cài một lần** (🟥 T4, ~1–2 phút; máy đã dựng bằng `bootstrap-all.sh` sau ngày 25/10 thì đã có):
+```bash
+bash deploy/data-tools/install.sh
+```
+✅ Hai dòng `deployment "sqlpad" successfully rolled out`, `deployment "mongo-express" successfully rolled out`, rồi
+địa chỉ và mật khẩu đăng nhập (đừng chụp màn hình). Sau đó **khởi động lại T1** (Ctrl+C rồi `bash scripts/demo-ui.sh`)
+để có hai cổng mới.
+
+1. **SQLPad** – http://localhost:3001, đăng nhập `admin@joblens.local` + mật khẩu ở trên. Kết nối *Trino (iceberg +
+   mongodb)* đã chọn sẵn. Mở danh sách câu lệnh đã lưu (mục *Queries* ở góc trên bên trái), chạy lần lượt:
+   *1. tạo bảng* → *2. INSERT* → *3. UPDATE* → *4. DELETE* → *5. snapshot* → *6. MongoDB qua Trino*.
+   Bấm **Run** (hoặc `Ctrl+Enter`); muốn chạy một câu thì bôi đen câu đó rồi Run. Có thể sửa giá trị hoặc gõ câu mới.
+   ✅ Mỗi lần Run, khung kết quả hiện bảng; câu 2 có dòng `web-1`, câu 3 thấy `salary_max_vnd` 35000000, câu 4 đếm
+   còn 0, câu 5 có các dòng snapshot, câu 6 có 2 ghi chú với tên tỉnh (*Thành phố Hà Nội*, *Thành phố Hồ Chí Minh*).
+   Lỗi đỏ ở khung kết quả = thông báo của Trino (sai cú pháp, bảng chưa có…), không làm hỏng gì.
+2. **Mongo Express** – http://localhost:8083/db/joblens/, trình duyệt hỏi đăng nhập: `admin` + mật khẩu ở trên.
+   Bấm collection `web_notes` (do câu 6 của SQLPad tạo) → **New Document** → nhập
+   `{ "note_id": "n3", "location_code": "48", "content": "Thêm từ Mongo Express" }` → **Save**; bấm một document để sửa
+   `content` rồi **Save**; nút **Del** để xóa.
+   ✅ Document mới/sửa hiện trong danh sách. Chạy lại câu 6 trên SQLPad (chỉ bôi đen câu `SELECT` cuối): thấy `n3` với
+   *Thành phố Đà Nẵng* – MongoDB sửa trên web, Trino đọc lại và join với Iceberg.
+3. Dọn: chạy câu *8. Dọn dẹp dữ liệu thử* trên SQLPad (hoặc `bash scripts/demo-data.sh clean`).
+
+Kafka không sửa được trên trình duyệt: Kafka UI để chế độ chỉ đọc vì bật ghi thì giao diện cũng tạo/xóa được topic
+(quy tắc repo: topic chỉ khai báo bằng `KafkaTopic`). Thêm tin qua Kafka dùng `bash scripts/demo-data.sh kafka …`.
 
 ## 6. Airflow (🟥 T4)
 

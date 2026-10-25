@@ -1,0 +1,13 @@
+{
+  "id": "q2-insert",
+  "name": "2. Iceberg – thêm tin (INSERT)",
+  "connectionId": "trino",
+  "queryText": "-- Sửa giá trị tùy ý rồi bấm Run. location_code: 01 Hà Nội, 79 TP.HCM, 48 Đà Nẵng (xem bảng iceberg.gold.dim_location).\nINSERT INTO iceberg.sandbox.web_jobs VALUES ('web-1', 'Kỹ sư dữ liệu (thêm từ SQLPad)', '01', 'mid', 20000000, 30000000);\nSELECT * FROM iceberg.sandbox.web_jobs ORDER BY job_id;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}

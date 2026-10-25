@@ -1,0 +1,13 @@
+{
+  "id": "q6-mongodb",
+  "name": "6. MongoDB qua Trino – tạo collection, thêm, xóa, join với Iceberg",
+  "connectionId": "trino",
+  "queryText": "-- Trino tạo collection MongoDB web_notes (và ghi lược đồ vào _schema). Connector MongoDB hỗ trợ INSERT/DELETE,\n-- không hỗ trợ UPDATE – sửa document trong mongo-express (http://localhost:8083).\n-- Xóa thử: DELETE FROM mongodb.joblens.web_notes WHERE note_id = 'n2'\nCREATE TABLE IF NOT EXISTS mongodb.joblens.web_notes (note_id varchar, location_code varchar, content varchar);\nINSERT INTO mongodb.joblens.web_notes VALUES ('n1', '01', 'Ghi chú thử từ SQLPad'), ('n2', '79', 'Ghi chú thứ hai');\nSELECT n.note_id, d.name AS tinh_thanh, n.content\nFROM mongodb.joblens.web_notes n JOIN iceberg.gold.dim_location d ON d.location_code = n.location_code\nORDER BY n.note_id;",
+  "createdBy": "admin@joblens.local",
+  "acl": [
+    {
+      "groupId": "__EVERYONE__",
+      "write": true
+    }
+  ]
+}
