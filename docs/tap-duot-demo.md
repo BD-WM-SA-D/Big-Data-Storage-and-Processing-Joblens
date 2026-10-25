@@ -1,7 +1,7 @@
 # Tập dượt demo – từng bước, từng terminal, kết quả mong đợi
 
 Dùng để tập dượt checkpoint 26/10 và buổi demo cuối kỳ, và để thành viên khác tự chạy thử trên máy mình. Kịch bản
-trình bày (nói gì, cho xem gì): [`demo.md`](demo.md). Kiến trúc và dữ liệu: [`kien-truc.md`](kien-truc.md).
+trình bày (nói gì, cho xem gì): [`demo.md`](demo.md); chạy trong buổi demo, từng bước trên màn hình: [`chay-demo.md`](chay-demo.md). Kiến trúc và dữ liệu: [`kien-truc.md`](kien-truc.md).
 
 Thời gian: lần đầu ~60 phút (gồm chờ cụm khởi động và DAG chạy), các lần sau ~35 phút.
 

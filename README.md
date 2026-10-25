@@ -38,7 +38,7 @@ uv run pytest -q                     # kiểm thử (Spark local)
 ```
 
 Không cần crawler: dữ liệu vào từ VietJobs (`deploy/data/`) và fixtures của repo `joblens`. Kiến trúc và mô tả dữ
-liệu: [`docs/kien-truc.md`](docs/kien-truc.md). Kịch bản demo: [`docs/demo.md`](docs/demo.md); tập dượt từng bước: [`docs/tap-duot-demo.md`](docs/tap-duot-demo.md).
+liệu: [`docs/kien-truc.md`](docs/kien-truc.md). Kịch bản demo: [`docs/demo.md`](docs/demo.md); tập dượt từng bước: [`docs/tap-duot-demo.md`](docs/tap-duot-demo.md); trong buổi demo: [`docs/chay-demo.md`](docs/chay-demo.md).
 
 ## Cấu trúc thư mục
 

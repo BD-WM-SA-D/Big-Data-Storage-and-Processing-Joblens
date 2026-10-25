@@ -12,7 +12,7 @@ tảng tự dựng, và **mỗi yêu cầu của bài tập lớn** được đ�
 ## Checkpoint 26/10 – yêu cầu và cách trình bày (~10 phút)
 
 Yêu cầu giảng viên: *git có mã chạy được, dữ liệu và kiến trúc hệ thống đã sẵn sàng*. Tập dượt từng bước (terminal nào, đầu ra nào là thành công):
-[`tap-duot-demo.md`](tap-duot-demo.md).
+[`tap-duot-demo.md`](tap-duot-demo.md). **Trong buổi demo** (bấm gì, chỉ ô nào, nói gì): [`chay-demo.md`](chay-demo.md).
 
 | Yêu cầu | Cho xem gì |
 |---|---|
