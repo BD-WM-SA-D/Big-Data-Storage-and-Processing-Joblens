@@ -3,7 +3,7 @@
   // Máy 4 nhân / 16 GB: đủ chạy toàn bộ nền tảng (profile full, cụm k3d một node để tiết kiệm đĩa).
   // Công cụ (k3d, kubectl, helm, uv) cài theo phiên bản cố định ở post-create.sh – không dùng latest.
   "name": "JobLens Big Data (k3d)",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "build": { "dockerfile": "Dockerfile" },  // python:1-3.12-bookworm, bỏ kho apt Yarn lỗi khóa (issue #1)
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {},
     "ghcr.io/devcontainers/features/java:1": { "version": "17" }

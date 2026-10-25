@@ -59,6 +59,11 @@ chiếu từ trình duyệt của mình, không cần chia sẻ link.
 
 ## Giới hạn cần biết
 
+- Tạo codespace báo `NO_PUBKEY 62D54FD4003F6525`, `Feature "Docker (Docker-in-Docker)" failed to install` rồi vào
+  *recovery container* (không có `docker`): kho apt Yarn trong image gốc lỗi khóa. `.devcontainer/Dockerfile` đã bỏ
+  kho này (issue #1); codespace tạo trước bản sửa thì chạy *Rebuild Container* (Ctrl+Shift+P →
+  `Codespaces: Rebuild Container`) hoặc tạo codespace mới.
+
 - Mạng trường chặn `*.github.dev` hoặc websocket thì không mở được cổng – mang theo phương án dự phòng (video, máy cá nhân).
 - Đĩa 32 GB: đủ cho image + VietJobs + bảng Iceberg. `docker system df` để xem; `docker image prune` xóa image cũ
   sau nhiều lần build.
