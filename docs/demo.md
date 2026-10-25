@@ -19,7 +19,8 @@ Yêu cầu giảng viên: *git có mã chạy được, dữ liệu và kiến t
 | Git có mã chạy được | GitHub repo: `README.md` (mục *Chạy nhanh*), lịch sử commit; terminal: `uv run pytest -q` (hoặc kết quả chạy trước), `kubectl get pods -A` – hệ thống đang chạy từ chính mã trong repo |
 | Kiến trúc | [`kien-truc.md`](kien-truc.md) mục 2–3 (sơ đồ luồng + triển khai, GitHub vẽ sẵn Mermaid); ADR Lambda/Kappa; `k9s` hoặc `kubectl get pods -A` theo namespace |
 | Dữ liệu | [`kien-truc.md`](kien-truc.md) mục 4 (nguồn, các tầng, số liệu); Grafana (số dòng bronze/silver, tỉ lệ chuẩn hóa); SeaweedFS (file Parquet + metadata Iceberg); `bash scripts/trino.sh -f scripts/demo-queries.sql` |
-| Nếu được hỏi "thêm/sửa/xóa dữ liệu thử" | `bash scripts/demo-data.sh sql` (Iceberg), `nosql` (MongoDB), `kafka "<tiêu đề>" "<lương>" "<tỉnh>"` (một tin đi hết pipeline) – mục 3.4 |
+| Nếu được hỏi "thêm/sửa/xóa dữ liệu thử" | Theo kịch bản: `bash scripts/demo-data.sh sql` / `nosql` / `kafka "<tiêu đề>" "<lương>" "<tỉnh>"` (mục 3.4). Tự do: `bash scripts/trino.sh`, `bash scripts/mongo.sh`; trên trình duyệt: SQLPad http://localhost:3001, Mongo Express http://localhost:8083 ([`tap-duot-demo.md`](tap-duot-demo.md) mục 5b, 5c) |
+| Nếu được hỏi "xử lý trùng thế nào" | Grafana: bronze (~75K dòng, giữ mọi bản) > silver (~48K tin, `MERGE` theo `job_uid`); GX kỳ vọng `job_uid` không trùng. Trùng giữa các trang = Web Mining (`silver.job_dedup`, ADR 0001 D5) – [`tap-duot-demo.md`](tap-duot-demo.md) mục 5c |
 
 Thứ tự gợi ý: kiến trúc (2 phút) → dữ liệu trên Grafana + Trino (3 phút) → streaming ngắn: replay 1.000 tin, ô bronze
 và cửa sổ tỉnh tăng (3 phút) → DAG Airflow đã chạy xanh (1 phút) → việc còn lại (1 phút). Chạy thử

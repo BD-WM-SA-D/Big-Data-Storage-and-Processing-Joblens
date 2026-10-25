@@ -5,6 +5,16 @@ trình bày (nói gì, cho xem gì): [`demo.md`](demo.md). Kiến trúc và dữ
 
 Thời gian: lần đầu ~60 phút (gồm chờ cụm khởi động và DAG chạy), các lần sau ~35 phút.
 
+## Thành viên khác: bắt đầu từ đâu
+
+| Trường hợp | Làm |
+|---|---|
+| Chưa có cụm trên máy | Mục 8 (dựng từ đầu, ~30–40 phút), rồi mục 1–7 |
+| Đã có cụm từ trước ngày 25/10 | `git pull`, rồi mục 1, `bash deploy/data-tools/install.sh` (mục 5c), rồi mục 2–7 |
+| Không đủ RAM / không có Windows | GitHub Codespaces – [`cloud-codespaces.md`](cloud-codespaces.md) (đang chờ test lại sau bản sửa issue #1) |
+
+Gặp lỗi: chụp màn hình lệnh + đầu ra, ghi bước số mấy, gửi nhóm (không kèm mật khẩu).
+
 ## Quy ước
 
 - **Mọi lệnh chạy trong terminal Ubuntu (WSL)**, trừ chỗ ghi rõ *PowerShell*. Trên Windows Terminal: mở tab Ubuntu mới
@@ -213,31 +223,91 @@ và đó là dữ liệu dùng cho báo cáo. Thử nghiệm trên bảng/collec
 
 ## 5c. Sửa dữ liệu trên trình duyệt – không cần terminal
 
-**Cài một lần** (🟥 T4, ~1–2 phút; máy đã dựng bằng `bootstrap-all.sh` sau ngày 25/10 thì đã có):
+Đã chạy thử đạt trên máy WSL ngày 25/10/2026.
+
+**Cài một lần** (🟥 T4 – hoặc T1 nếu chưa chạy `demo-ui.sh`). Máy dựng bằng `bootstrap-all.sh` sau ngày 25/10 đã có
+sẵn, bỏ qua bước này.
 ```bash
+git pull
 bash deploy/data-tools/install.sh
 ```
-✅ Hai dòng `deployment "sqlpad" successfully rolled out`, `deployment "mongo-express" successfully rolled out`, rồi
-địa chỉ và mật khẩu đăng nhập (đừng chụp màn hình). Sau đó **khởi động lại T1** (Ctrl+C rồi `bash scripts/demo-ui.sh`)
-để có hai cổng mới.
+✅ Lần đầu ~2–5 phút (tải image SQLPad và mongo-express, mỗi image ~150–250 MB). Kết thúc bằng:
+```
+deployment "sqlpad" successfully rolled out
+deployment "mongo-express" successfully rolled out
 
-1. **SQLPad** – http://localhost:3001, đăng nhập `admin@joblens.local` + mật khẩu ở trên. Kết nối *Trino (iceberg +
-   mongodb)* đã chọn sẵn. Mở danh sách câu lệnh đã lưu (mục *Queries* ở góc trên bên trái), chạy lần lượt:
-   *1. tạo bảng* → *2. INSERT* → *3. UPDATE* → *4. DELETE* → *5. snapshot* → *6. MongoDB qua Trino*.
-   Bấm **Run** (hoặc `Ctrl+Enter`); muốn chạy một câu thì bôi đen câu đó rồi Run. Có thể sửa giá trị hoặc gõ câu mới.
-   ✅ Mỗi lần Run, khung kết quả hiện bảng; câu 2 có dòng `web-1`, câu 3 thấy `salary_max_vnd` 35000000, câu 4 đếm
-   còn 0, câu 5 có các dòng snapshot, câu 6 có 2 ghi chú với tên tỉnh (*Thành phố Hà Nội*, *Thành phố Hồ Chí Minh*).
-   Lỗi đỏ ở khung kết quả = thông báo của Trino (sai cú pháp, bảng chưa có…), không làm hỏng gì.
-2. **Mongo Express** – http://localhost:8083/db/joblens/, trình duyệt hỏi đăng nhập: `admin` + mật khẩu ở trên.
-   Bấm collection `web_notes` (do câu 6 của SQLPad tạo) → **New Document** → nhập
-   `{ "note_id": "n3", "location_code": "48", "content": "Thêm từ Mongo Express" }` → **Save**; bấm một document để sửa
-   `content` rồi **Save**; nút **Del** để xóa.
-   ✅ Document mới/sửa hiện trong danh sách. Chạy lại câu 6 trên SQLPad (chỉ bôi đen câu `SELECT` cuối): thấy `n3` với
-   *Thành phố Đà Nẵng* – MongoDB sửa trên web, Trino đọc lại và join với Iceberg.
-3. Dọn: chạy câu *8. Dọn dẹp dữ liệu thử* trên SQLPad (hoặc `bash scripts/demo-data.sh clean`).
+Xong. Mở bằng: bash scripts/demo-ui.sh
+  SQLPad        http://localhost:3001   đăng nhập admin@joblens.local / <mật khẩu>
+  mongo-express http://localhost:8083   đăng nhập admin / <mật khẩu>
+```
+Chép hai mật khẩu ra chỗ riêng (đừng chụp màn hình, đừng gửi nhóm chat). Quên thì chạy lại lệnh trên – an toàn, in
+lại mật khẩu. Muốn đổi mật khẩu: `kubectl delete secret sqlpad-admin mongo-express-auth -n serving` rồi chạy lại.
+
+| Thấy | Nghĩa là | Làm gì |
+|---|---|---|
+| `Waiting for deployment "sqlpad" rollout … pending termination` lâu | Đang tải image | Đợi; ô T khác: `kubectl get pods -n serving -l 'app in (sqlpad,mongo-express)'` |
+| `error: timed out waiting for the condition` | Quá 5 phút | Xem lệnh trên: `ContainerCreating` → đợi rồi chạy lại install; `ErrImagePull` → gửi `kubectl describe pod -n serving -l app=sqlpad \| tail -15` |
+| Log SQLPad có `Port NaN already occupied` | Bản cũ trước ngày 25/10 | `git pull` rồi chạy lại install (phải thấy `deployment.apps/sqlpad configured`) |
+
+Sau khi cài: **khởi động lại T1** (Ctrl+C rồi `bash scripts/demo-ui.sh`). ✅ Danh sách có thêm
+`SQLPad http://localhost:3001/` và `Mongo Express http://localhost:8083/db/joblens/`.
+
+### SQLPad – SQL trên trình duyệt
+
+1. Mở http://localhost:3001, đăng nhập `admin@joblens.local` + mật khẩu SQLPad.
+   ✅ Thanh đen trên cùng: *SQLPad · Queries · New · History · Connections …*; ô kết nối ghi **Trino (iceberg +
+   mongodb)**; khung trái liệt kê schema `bronze`, `gold`, `silver`, `staging`… (kết nối Trino chạy được).
+2. Bấm **Queries** trên thanh đen → danh sách **8 câu lệnh mẫu** → bấm một câu để mở vào ô soạn → bấm **Run** (nút
+   xanh góc phải) hoặc `Ctrl+Enter`.
+3. **Cách đọc kết quả.** Câu mẫu có nhiều câu lệnh, nên khung dưới hiện **bảng tóm tắt**: mỗi dòng một câu lệnh, cột
+   *Status* `finished` và *Rows*. **Bấm vào chữ xanh của câu lệnh cuối** (thường là `SELECT …`) hoặc biểu tượng ↗ cuối
+   dòng để xem dữ liệu.
+   - Câu INSERT/UPDATE/DELETE chỉ trả cột `rows` = số dòng bị ảnh hưởng (ví dụ `rows 1`) – đúng như vậy, dữ liệu xem ở
+     câu `SELECT` sau nó.
+   - Khi trình bày: **bôi đen một câu** (ví dụ chỉ dòng `SELECT`) rồi Run – bảng kết quả hiện ngay, không qua tóm tắt.
+   - Schema `sandbox` mới tạo chưa hiện ở khung trái: bấm nút ↻ cạnh *Search schema*.
+4. Chạy lần lượt và kiểm tra **câu lệnh cuối** của mỗi câu mẫu:
+
+   | Câu mẫu | ✅ Kết quả của câu lệnh cuối |
+   |---|---|
+   | 1. tạo bảng | bảng rỗng, cột `job_id, title, location_code, level_code, salary_min_vnd, salary_max_vnd` |
+   | 2. INSERT | 1 dòng `web-1`, `Kỹ sư dữ liệu (thêm từ SQLPad)`, `01`, `mid`, `20000000`, `30000000` |
+   | 3. UPDATE | cùng dòng, `salary_max_vnd` = **35000000** |
+   | 4. DELETE | `so_dong_con_lai` = **0** |
+   | 5. snapshot | các dòng `append`, rồi `overwrite`/`delete` – mỗi thao tác một snapshot |
+   | 6. MongoDB qua Trino | 2 dòng: `n1` – *Thành phố Hà Nội*, `n2` – *Thành phố Hồ Chí Minh* |
+
+   Có thể sửa giá trị trong câu mẫu hoặc bấm **New** để gõ câu mới. Khung lỗi đỏ = thông báo của Trino (sai cú pháp,
+   bảng chưa có…), không làm hỏng gì. Chạy câu 2 hoặc 6 hai lần sẽ có dòng trùng (bảng Iceberg/collection không có khóa
+   chính – xem *Về dữ liệu trùng* ở cuối mục này).
+
+### Mongo Express – sửa document MongoDB
+
+1. Mở http://localhost:8083/db/joblens/; trình duyệt hỏi đăng nhập: `admin` + mật khẩu mongo-express.
+   ✅ Danh sách collection của database `joblens`, có `web_notes` (câu 6 của SQLPad tạo).
+2. Bấm **web_notes** → **New Document** → thay nội dung bằng
+   `{ "note_id": "n3", "location_code": "48", "content": "Thêm từ Mongo Express" }` → **Save**.
+   ✅ `n3` hiện cùng `n1`, `n2`.
+3. Bấm document `n3`, sửa `content` thành `"Đã sửa"` → **Save**. ✅ Danh sách hiện `Đã sửa`.
+4. Quay lại SQLPad, mở câu 6, **bôi đen câu `SELECT` cuối** → Run.
+   ✅ 3 dòng, có `n3` – *Thành phố Đà Nẵng* – `Đã sửa`: sửa MongoDB trên web, Trino đọc lại và join với Iceberg.
+5. Bấm **Del** cạnh `n3` → xác nhận. ✅ `n3` biến mất.
+
+### Dọn dẹp
+
+SQLPad → **Queries → 8. Dọn dẹp dữ liệu thử** → Run (hoặc `bash scripts/demo-data.sh clean`).
+✅ Hai câu lệnh `finished`; tải lại Mongo Express không còn `web_notes`.
 
 Kafka không sửa được trên trình duyệt: Kafka UI để chế độ chỉ đọc vì bật ghi thì giao diện cũng tạo/xóa được topic
 (quy tắc repo: topic chỉ khai báo bằng `KafkaTopic`). Thêm tin qua Kafka dùng `bash scripts/demo-data.sh kafka …`.
+
+### Về dữ liệu trùng (khi được hỏi)
+
+| Loại trùng | Xử lý ở đâu |
+|---|---|
+| Cùng một tin nhận nhiều lần (replay, crawler thấy lại) | Bronze giữ mọi bản (lịch sử thô); silver `MERGE INTO` theo `job_uid = sha1(source:source_job_id)` → mỗi tin một dòng. Bằng chứng: Grafana *Dòng trong bronze* (~75K) lớn hơn *Tin trong silver* (~48K); GX kiểm `job_uid` không trùng mỗi lượt DAG |
+| Cùng một tin đăng ở hai trang / nội dung gần giống | Việc của repo Web Mining (ADR 0001 D5): image của họ ghi `silver.job_dedup`; repo này không tự tính. Gold đã ghi chỗ sẽ đổi sang kết quả đó |
+| Bảng/collection thử (`sandbox.*`, `web_notes`) | Không khử trùng: Iceberg và MongoDB-qua-Trino không ép khóa chính; tính duy nhất do `MERGE` của pipeline đảm bảo |
 
 ## 6. Airflow (🟥 T4)
 
