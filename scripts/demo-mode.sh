@@ -28,7 +28,8 @@ wait_tasks_done() {  # đợi các pod task của DAG trong compute kết thúc 
     n=$(kubectl get pods -n compute -l kubernetes_pod_operator=True --field-selector=status.phase=Running \
           --no-headers 2>/dev/null | wc -l)
     [ "$n" -eq 0 ] && return 0
-    echo "   còn ${n} task Airflow đang chạy – đợi xong (Ctrl+C để bỏ qua và tắt luôn)"
+    echo "   còn ${n} task Airflow đang chạy: $(kubectl get pods -n compute -l kubernetes_pod_operator=True \
+          --field-selector=status.phase=Running -o jsonpath='{.items[*].metadata.labels.task_id}' 2>/dev/null) – đợi xong"
     sleep 10
   done
   echo "   quá 20 phút, vẫn tắt scheduler (task đang chạy sẽ bị đánh dấu lỗi)"
@@ -43,7 +44,13 @@ airflow_scale() {  # airflow_scale 0|1
 case "${1:-status}" in
   streaming)
     echo "==> Tạm dừng DAG joblens_pipeline (không tạo lượt chạy mới)"
-    af dags pause joblens_pipeline || echo "   (scheduler đang tắt – bỏ qua)"
+    # Ngay sau khi khởi động cụm, scheduler có thể chưa sẵn sàng: đợi rồi mới tạm dừng – nếu bỏ qua, DAG vẫn
+    # chạy tiếp task sau và vòng đợi bên dưới không bao giờ kết thúc.
+    if [ "$(kubectl get pod airflow-scheduler-0 -n "$NS_AF" -o name 2>/dev/null)" ]; then
+      kubectl wait pod/airflow-scheduler-0 -n "$NS_AF" --for=condition=Ready --timeout=5m >/dev/null 2>&1 \
+        || echo "   scheduler chưa sẵn sàng sau 5 phút"
+    fi
+    if af dags pause joblens_pipeline; then echo "   đã tạm dừng"; else echo "   (scheduler đang tắt – bỏ qua)"; fi
     wait_tasks_done
     echo "==> Tắt Airflow scheduler + dag-processor (giải phóng ~1 GB)"
     airflow_scale 0
