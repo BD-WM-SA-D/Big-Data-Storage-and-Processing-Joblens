@@ -26,9 +26,11 @@ fi
 kubectl create configmap sqlpad-queries -n "$NS" --from-file="${HERE}/sqlpad-queries/" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+EXISTED=$(kubectl get deployment sqlpad -n "$NS" -o name 2>/dev/null || true)
 kubectl apply -f "${HERE}/sqlpad.yaml" -f "${HERE}/mongo-express.yaml"
-# câu lệnh mẫu chỉ nạp khi SQLPad khởi động → khởi động lại khi chạy lại script
-kubectl rollout restart deployment/sqlpad -n "$NS" >/dev/null
+# câu lệnh mẫu chỉ nạp khi SQLPad khởi động → khởi động lại khi chạy lại script (lần đầu không cần: pod mới đã nạp)
+[ -z "$EXISTED" ] || kubectl rollout restart deployment/sqlpad -n "$NS" >/dev/null
+echo "==> Lần đầu phải tải image (~150–250 MB mỗi image) – có thể mất vài phút tùy mạng"
 echo "==> Chờ SQLPad và mongo-express"
 kubectl rollout status deployment/sqlpad -n "$NS" --timeout=5m
 kubectl rollout status deployment/mongo-express -n "$NS" --timeout=5m
