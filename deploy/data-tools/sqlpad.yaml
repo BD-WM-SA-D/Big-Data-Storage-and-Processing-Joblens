@@ -19,12 +19,17 @@ spec:
       labels:
         app: sqlpad
     spec:
+      # Không cho Kubernetes tự thêm biến môi trường của Service: Service "sqlpad" sinh SQLPAD_PORT=tcp://…:3000,
+      # trùng tên biến cấu hình cổng của SQLPad → SQLPad đọc ra "NaN" và nghe trên cổng ngẫu nhiên.
+      enableServiceLinks: false
       containers:
         - name: sqlpad
           image: sqlpad/sqlpad:7.5.7
           ports:
             - containerPort: 3000
           env:
+            - name: SQLPAD_PORT
+              value: "3000"
             - name: SQLPAD_ADMIN
               value: admin@joblens.local
             - name: SQLPAD_ADMIN_PASSWORD
