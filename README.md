@@ -62,6 +62,8 @@ gx/, event-generator/   chưa dùng (GX chạy trong spark-jobs/gx_silver.py; ev
 
 - Báo cáo môn: [`docs/`](docs/)
 - Quyết định kiến trúc: [`docs/adr/`](docs/adr/)
+- Yêu cầu môn học và việc còn lại: [`docs/yeu-cau-mon-hoc.md`](docs/yeu-cau-mon-hoc.md)
+- Phối hợp với repo Web Mining: [`docs/phoi-hop-web-mining.md`](docs/phoi-hop-web-mining.md)
 - Thuật ngữ: [`glossary.md` trong repo joblens](https://github.com/BD-WM-SA-D/joblens/blob/main/glossary.md)
 
 ## Phụ thuộc (chỉ để tham khảo, không thuộc phần chấm)
