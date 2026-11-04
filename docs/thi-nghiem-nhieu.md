@@ -7,7 +7,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 | Phần | Vai trò | Trạng thái |
 |---|---|---|
 | 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm: 4 lượt 0/10/20/40% |
-| 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | 🧪 mã + kiểm thử xong (207 kiểm thử toàn repo đạt); chờ chạy trên cụm |
+| 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ✅ đã chạy trên cụm (4 lượt × 2 chế độ) |
 | 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ⬜ |
 
 **Ranh giới (ADR 0001 joblens):** chỉ đụng các trường mà repo này chuẩn hóa (D2: lương, địa điểm, kinh nghiệm, tiêu đề)
@@ -162,8 +162,8 @@ Số đo trên VietJobs: phần 3.
 **Ảnh hưởng tới pipeline thật** (cần biết trước khi chạy):
 - Lần chạy `silver_job_postings` tiếp theo dùng chuẩn hóa mới cho **dòng bronze mới**; dòng silver cũ giữ cách chuẩn hóa
   cũ cho tới khi chạy lại toàn bộ: `EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh silver_job_postings --full`.
-- Tin thật có lương > 300 triệu/tháng hoặc kinh nghiệm > 40 năm sẽ thành null – số tin bị ảnh hưởng: `<cần đo>`
-  (phần 3 đếm trên lượt `r0_s42`).
+- Tin thật có lương > 300 triệu/tháng hoặc kinh nghiệm > 40 năm sẽ thành null – trên VietJobs sạch (`r0_s42`): 1 tin mất
+  lương; tin mất kinh nghiệm: `<cần đo>` (phần 3).
 - Job streaming `bronze_jobs` ghi thêm `bronze.ingest_errors`; job đang chạy phải khởi động lại mới dùng mã mới.
 
 **Chạy trên cụm**
@@ -182,7 +182,31 @@ FROM iceberg.lab.job_postings GROUP BY 1, 2 ORDER BY 1, 2;
 SELECT run_id, reason, count(*) AS so_message FROM iceberg.lab.quarantine GROUP BY 1, 2 ORDER BY 1, 2;
 ```
 
-**Số liệu trên VietJobs:** `<cần đo>`.
+**Số liệu trên VietJobs (chạy 2026-11-04, `noise_lab clean`, ~2 phút cho 4 lượt × 2 chế độ):**
+
+| Lượt | Chế độ | Tin vào silver | Có lương | Có tỉnh | Message cách ly |
+|---|---|---|---|---|---|
+| `r0_s42` | baseline | 48.092 | 34.338 | 47.342 | – |
+| `r0_s42` | robust | 48.092 | 34.337 | 47.411 | 0 |
+| `r10_s42` | baseline | 47.500 | 33.379 | 45.752 | (bỏ im lặng) |
+| `r10_s42` | robust | 47.500 | 33.358 | 46.419 | 592 |
+| `r20_s42` | baseline | 46.887 | 32.421 | 44.197 | (bỏ im lặng) |
+| `r20_s42` | robust | 46.887 | 32.391 | 45.431 | 1.205 |
+| `r40_s42` | baseline | 45.700 | 30.466 | 41.056 | (bỏ im lặng) |
+| `r40_s42` | robust | 45.700 | 30.399 | 43.444 | 2.392 |
+
+Lý do cách ly: `r10_s42` 288 `invalid_json` + 304 `missing:crawl_ts`; `r20_s42` 613 + 592; `r40_s42` 1.218 + 1.174.
+
+Đọc bảng:
+- **Không mất tin nào:** tin vào silver + tin bị cách ly = 48.092 ở mọi lượt (ví dụ `r20_s42`: 46.887 + 1.205). Message
+  trùng và bản cũ đến sau không thành tin mới – silver gộp về một dòng mỗi `job_uid`. Số cách ly ở `r20_s42` khớp đúng
+  đáp án (613 `broken_json`, 592 `missing_required`).
+- **Có tỉnh:** chế độ robust nhận ra thêm 667 / 1.234 / 2.388 tin ở mức nhiễu 10/20/40% – phần lớn nhờ sửa mojibake, gõ sai,
+  hậu tố `City`. Đúng hay nhầm tỉnh: phần 3 đối chiếu đáp án.
+- **Có lương:** robust *ít* hơn baseline một chút (−21/−30/−67) vì loại ngoại lai thành null – đó là hành vi mong đợi;
+  phần 3 đo xem baseline đã đưa bao nhiêu giá trị sai vào thống kê.
+- **Ảnh hưởng tới dữ liệu thật (lượt sạch `r0_s42`):** chế độ robust nhận thêm **69** tin có tỉnh (cần kiểm tra không nhầm
+  ở phần 3) và **1** tin mất lương (vượt ngưỡng 300 triệu/tháng hoặc bị hiểu thành lương năm).
 
 ## Phần 3 – Đo
 
