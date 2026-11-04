@@ -8,7 +8,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 |---|---|---|
 | 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm: 4 lượt 0/10/20/40% |
 | 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ✅ đã chạy trên cụm (4 lượt × 2 chế độ) |
-| 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | 🧪 mã + kiểm thử xong; chờ chạy trên cụm |
+| 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ✅ đã chạy trên cụm – [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md) |
 
 **Ranh giới (ADR 0001 joblens):** chỉ đụng các trường mà repo này chuẩn hóa (D2: lương, địa điểm, kinh nghiệm, tiêu đề)
 và lớp message (trùng y hệt, sai thứ tự, hỏng). Trùng gần giống giữa các trang là dedup của Web Mining (D5) – không làm.
@@ -286,4 +286,13 @@ kê lương (13 trên 34.338 tin có lương, 0,04%). Lần đánh giá này cũ
 bản đầu giữ lại nửa còn lại (`50 - 500 triệu` → chỉ còn 50 triệu) – tạo ra khoảng lương không có trong tin gốc. Đã sửa:
 một đầu vượt ngưỡng thì bỏ cả khoảng (kiểm thử `test_salary_range_with_one_outlier_end_is_dropped_whole`).
 
-**Kết quả trên VietJobs:** [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md) – `<cần đo>`.
+**Kết quả trên VietJobs (2026-11-04)** – chi tiết [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md):
+
+| | Baseline (trước phần 2) | Robust (sau phần 2) |
+|---|---|---|
+| Tin bị nhiễu được xử lý đúng – lượt 10 / 20 / 40% | 41,7% / 42,4% / 42,9% | 98,0% / 98,1% / 97,8% |
+| Lệch trung vị lương theo tỉnh so với dữ liệu sạch (TB) – 10 / 20 / 40% | 1,01% / 1,01% / 1,84% | 0,18% / 0,69% / 0,78% |
+| Lệch số tin theo tỉnh (TB) – 10 / 20 / 40% | 3,2% / 6,1% / 12,1% | 2,1% / 4,0% / 8,2% |
+| Message hỏng | mất im lặng | 100% vào cách ly kèm lý do |
+
+Giới hạn còn lại và lý do: xem mục "Đọc kết quả" trong file benchmark.
