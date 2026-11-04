@@ -9,10 +9,12 @@ nguyên văn từ log của job / truy vấn Trino – chưa chạy thì để `
 - **Đúng** = kết quả giống kết quả của *cùng chế độ* trên lượt sạch `r0_s42` (khôi phục), hoặc bị loại đúng (ngoại lai,
   mất thông tin → null), hoặc được cách ly (message hỏng), hoặc chỉ còn một bản mới nhất (trùng, sai thứ tự).
 
-## Lần 1 – 2026-11-04, khoảng 09:55–10:05 (giờ VN)
+## Lần 1 – 2026-11-04 (đo lại 21:00 giờ VN sau khi chạy lại `clean` cho đủ 4 lượt)
 
 - Mã: sau commit `fix(normalize): bỏ cả khoảng lương khi một đầu vượt ngưỡng…`; profile `<full|lite>`; Spark local
   mode (`EXECUTORS=0`, driver 2 GB). Dữ liệu VietJobs 48.092 tin, seed 42, 4 lượt 0/10/20/40%.
+- Lần đo 10:00 có 3 lượt nhiễu còn kết quả `clean` của mã cũ (trước bản sửa "bỏ cả khoảng lương") – phát hiện nhờ
+  `lab.noise_errors`; số dưới đây là sau khi chạy lại `clean` cho cả 4 lượt bằng cùng một mã.
 - Đếm bằng truy vấn Trino trên `iceberg.lab.noise_metrics`, `gold_impact`, `clean_diffs`; làm tròn 1 chữ số thập phân.
 
 **Tỉ lệ xử lý đúng theo loại nhiễu** (gộp lượt 10/20/40%; *số tin* = số tin bị nhiễu loại đó trong cả ba lượt):
@@ -28,10 +30,10 @@ nguyên văn từ log của job / truy vấn Trino – chưa chạy thì để `
 | `encoding_mojibake` | recover | 1.178 | 0,3% | 100,0% |
 | `salary_yearly` | recover | 744 | 0,0% | 98,9% |
 | `location_typo` | recover | 1.200 | 2,0% | 88,4% |
-| `salary_outlier` | flag | 784 | 61,4% | 98,0% |
+| `salary_outlier` | flag | 784 | 61,4% | 99,0% |
 | `location_abbrev` | recover | 933 | 46,5% | 74,4% |
 | `location_no_accent` | recover | 1.204 | 99,8% | 99,8% |
-| `duplicate` | dedup | 1.128 | 100,0% | 99,8% |
+| `duplicate` | dedup | 1.128 | 100,0% | 100,0% |
 | `out_of_order` | keep_latest | 1.195 | 100,0% | 100,0% |
 | `missing_fields` | unknown | 1.260 | 100,0% | 100,0% |
 | `salary_placeholder` | unknown | 1.164 | 100,0% | 100,0% |
@@ -42,9 +44,9 @@ nguyên văn từ log của job / truy vấn Trino – chưa chạy thì để `
 
 | Lượt | Tin nhiễu | Baseline đúng | Robust đúng |
 |---|---|---|---|
-| `r10_s42` | 4.830 | 41,70% | 98,03% |
-| `r20_s42` | 9.614 | 42,42% | 98,09% |
-| `r40_s42` | 19.325 | 42,92% | 97,84% |
+| `r10_s42` | 4.830 | 41,70% | 98,10% |
+| `r20_s42` | 9.614 | 42,42% | 98,13% |
+| `r40_s42` | 19.325 | 42,92% | 97,89% |
 
 **Ảnh hưởng tới số liệu theo tỉnh** (11 tỉnh có ≥ 200 tin có lương ở lượt sạch; % lệch so với lượt sạch cùng chế độ):
 
@@ -66,9 +68,9 @@ nguyên văn từ log của job / truy vấn Trino – chưa chạy thì để `
   tin nhiễu được xử lý độc lập.
 - Loại pipeline cũ đã làm tốt (định dạng lương, đảo min/max, placeholder, mất trường, trùng, sai thứ tự) giữ nguyên.
 - Còn thiếu: `location_abbrev` 74,4% (viết tắt 2 ký tự `SG`, `ĐN`… cố ý không đoán); `location_typo` 88,4% (khóa < 5 ký tự
-  không sửa; và đây là **cận trên** – bộ tiêm chỉ dùng đúng ba kiểu lỗi mà bộ so khớp nhận); `salary_outlier` 98,0% (gõ thừa
-  hai số 0 vào lương thấp, ví dụ 2 triệu → 200 triệu, vẫn dưới ngưỡng 300 triệu nên không bị bắt); `salary_yearly` 98,9%;
-  `duplicate` robust 99,8% (≈ 2 tin chấm sai – chưa rõ nguyên nhân, `<cần kiểm tra>`).
+  không sửa; và đây là **cận trên** – bộ tiêm chỉ dùng đúng ba kiểu lỗi mà bộ so khớp nhận); `salary_outlier` 99,0% (gõ thừa
+  hai số 0 vào lương thấp, ví dụ 2 triệu → 200 triệu, vẫn dưới ngưỡng 300 triệu nên không bị bắt); `salary_yearly` 98,9%.
+  Danh sách từng tin chấm sai: `SELECT * FROM iceberg.lab.noise_errors`.
 - Số tin theo tỉnh vẫn lệch ở chế độ robust (2–8%) vì message hỏng bị cách ly – tin đó không vào silver ở cả hai chế độ;
   khác biệt là robust giữ lại được lý do trong `lab.quarantine` thay vì mất im lặng. Phần lệch còn lại của baseline là tin
   mất tỉnh do mojibake, gõ sai.

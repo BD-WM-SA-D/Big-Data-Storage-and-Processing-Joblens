@@ -290,7 +290,7 @@ một đầu vượt ngưỡng thì bỏ cả khoảng (kiểm thử `test_salar
 
 | | Baseline (trước phần 2) | Robust (sau phần 2) |
 |---|---|---|
-| Tin bị nhiễu được xử lý đúng – lượt 10 / 20 / 40% | 41,7% / 42,4% / 42,9% | 98,0% / 98,1% / 97,8% |
+| Tin bị nhiễu được xử lý đúng – lượt 10 / 20 / 40% | 41,7% / 42,4% / 42,9% | 98,1% / 98,1% / 97,9% |
 | Lệch trung vị lương theo tỉnh so với dữ liệu sạch (TB) – 10 / 20 / 40% | 1,01% / 1,01% / 1,84% | 0,18% / 0,69% / 0,78% |
 | Lệch số tin theo tỉnh (TB) – 10 / 20 / 40% | 3,2% / 6,1% / 12,1% | 2,1% / 4,0% / 8,2% |
 | Message hỏng | mất im lặng | 100% vào cách ly kèm lý do |

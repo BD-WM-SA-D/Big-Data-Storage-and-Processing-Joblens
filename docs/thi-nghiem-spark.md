@@ -9,7 +9,7 @@ Quy ước terminal như [`tap-duot-demo.md`](tap-duot-demo.md): **T1–T4** là
 
 | # | Lượt | Đóng yêu cầu | Trạng thái |
 |---|---|---|---|
-| A | Tìm tin bị chấm sai trong thí nghiệm nhiễu (`lab.noise_errors`) | `<cần kiểm tra>` ở `benchmarks/noise_robustness.md` | 🧪 mã xong |
+| A | Tìm tin bị chấm sai trong thí nghiệm nhiễu (`lab.noise_errors`) | `<cần kiểm tra>` ở `benchmarks/noise_robustness.md` | ✅ xong |
 | B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | 🧪 lệnh sẵn |
 | C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | 🧪 lệnh sẵn |
 | D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | 🧪 lệnh sẵn |
@@ -32,7 +32,11 @@ bash scripts/trino.sh "SELECT noise_type, mode, count(*) FROM iceberg.lab.noise_
 ```
 ✅ `==> Xong`; truy vấn 1 in ra các tin `duplicate` bị chấm sai (cột nào khác cột `ref_…` là nguyên nhân).
 
-Kết quả: `<cần đo>`.
+Kết quả (2026-11-04): 3 lần chấm sai `duplicate` đều là tin `47462` ở 3 lượt nhiễu – lương ra `200000000 / NULL`, mốc
+`NULL / NULL`. Không phải lỗi gộp bản trùng: kết quả `clean` của 3 lượt nhiễu còn từ mã **trước** bản sửa "một đầu vượt
+ngưỡng thì bỏ cả khoảng", còn lượt sạch đã chạy bằng mã mới. Chạy lại `clean` cho đủ 4 lượt rồi `evaluate`: `duplicate`
+100%, `salary_outlier` 98,0% → 99,0%; số liệu trong `benchmarks/noise_robustness.md` đã cập nhật. Bài học: mỗi lần đổi mã
+chuẩn hóa phải chạy lại `clean` cho **mọi** lượt trước khi `evaluate` (so sánh hai lượt từ hai phiên bản mã là vô nghĩa).
 
 ## B. Streaming với output mode `append`
 
