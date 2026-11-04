@@ -22,6 +22,7 @@ Bước `evaluate` (phần 3): so kết quả với đáp án và với lượt 
   lake.lab.noise_metrics   theo lượt × chế độ × loại nhiễu: số tin, số xử lý đúng, tỉ lệ
   lake.lab.gold_impact     nhiễu làm lệch trung vị lương / số tin theo tỉnh bao nhiêu so với mốc sạch
   lake.lab.clean_diffs     trên dữ liệu SẠCH, tin nào robust cho kết quả khác baseline (để kiểm tra nhầm)
+  lake.lab.noise_errors    từng tin bị chấm SAI, kèm giá trị ra và giá trị mốc – để tìm nguyên nhân
        EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab evaluate
 """
 
@@ -47,6 +48,7 @@ MODES = ("baseline", "robust")
 METRICS = f"{NS}.noise_metrics"
 GOLD_IMPACT = f"{NS}.gold_impact"
 CLEAN_DIFFS = f"{NS}.clean_diffs"
+ERRORS = f"{NS}.noise_errors"
 REFERENCE_RUN = "r0_s42"
 MIN_SALARY_JOBS = (
     200  # như ô Grafana "Lương trung vị theo tỉnh": chỉ tỉnh có ≥ 200 tin có lương
@@ -329,6 +331,20 @@ def judge(truth, postings, quarantine, reference_run: str = REFERENCE_RUN):
     return j.withColumn("ok", F.coalesce(ok, F.lit(False)))
 
 
+def wrong(judged):
+    """Các dòng bị chấm sai kèm giá trị ra và giá trị mốc (lab.noise_errors)."""
+    from pyspark.sql import functions as F
+
+    return judged.filter(~F.col("ok")).select(
+        "run_id", "mode", "source_job_id", "noise_type", "expected", "field", "noisy_value",
+        F.coalesce("present", F.lit(False)).alias("present"), F.coalesce("quarantined", F.lit(False)).alias("quarantined"),
+        "title", "ref_title", "salary_min_vnd", "ref_salary_min_vnd", "salary_max_vnd", "ref_salary_max_vnd",
+        F.col("location_codes").cast("string").alias("location_codes"),
+        F.col("ref_location_codes").cast("string").alias("ref_location_codes"),
+        "experience_min_years",
+    )  # fmt: skip
+
+
 def metrics(judged):
     from pyspark.sql import functions as F
 
@@ -448,6 +464,7 @@ def evaluate(spark, args) -> None:
     truth = spark.table(TRUTH)
     judged = judge(truth, postings, spark.table(QUARANTINE), args.reference)
     m = metrics(judged).persist()
+    wrong(judged).writeTo(ERRORS).using("iceberg").createOrReplace()
     m.writeTo(METRICS).using("iceberg").createOrReplace()
     gi = gold_impact(postings, args.reference)
     gi.writeTo(GOLD_IMPACT).using("iceberg").createOrReplace()

@@ -90,13 +90,13 @@ liệu, **thêm nhiễu vào dữ liệu rồi xử lý nhiễu** – kế hoạ
 | | *Biến đổi + xử lý nhiễu (yêu cầu thêm)* | ✅ | `normalize.clean_text`, lương năm, tỉnh gõ sai, ngoại lai; `bronze.ingest_errors` – [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md) |
 | 3. Join | Broadcast join (dữ liệu lệch) | ✅ | `analytics_spark.explode_locations` – tin ⋈ 34 tỉnh; Hà Nội/TP.HCM chiếm phần lớn |
 | | Sort-merge join | ✅ | `analytics_spark.activity_join` – silver ⋈ snapshot theo `job_uid` (hint MERGE) |
-| | Tối ưu nhiều join | 🧪 | AQE bật trong `analytics_spark.py`; kế hoạch lưu S3 – **chưa đo** bật/tắt AQE, thứ tự join |
+| | Tối ưu nhiều join | 🧪 | `bench_joins.py`: 4 cấu hình (sort-merge, broadcast, AQE, AQE + viết lại thứ tự join) – **chờ chạy trên cụm** ([`thi-nghiem-spark.md`](thi-nghiem-spark.md) mục E) |
 | 4. Hiệu năng | Partition pruning | ✅ | bronze `days(ingest_ts), source`; cờ `bronze_filter_pushed` trong `plan_checks` |
 | | Bucketing | ✅ | silver `bucket(16, job_uid)` |
 | | Cache / persist | ✅ | `bronze_jobs.py` (persist mỗi micro-batch); `analytics_spark.py` |
 | | Kế hoạch thực thi | ✅ | `analytics_spark.plan_text` → `s3://joblens/reports/spark-plans/`; cột `plan_checks` trên Grafana |
 | 5. Streaming | Structured Streaming | ✅ | `bronze_jobs.py`, `stream_province_windows.py` |
-| | Nhiều output mode | 🧪 | `stream_province_windows.py --output-mode update\|append` – đã chạy `update`; **chưa chạy `append`** |
+| | Nhiều output mode | 🧪 | `stream_province_windows.py --output-mode update\|append` – đã chạy `update`; `append`: [`thi-nghiem-spark.md`](thi-nghiem-spark.md) mục B |
 | | Watermark, dữ liệu trễ | ✅ | watermark 10 phút, replay `--late-every 10`: lượt 24/10 có batch bỏ 8, 4, 7 dòng (`deploy/compat.md`); lượt tập dượt 25/10 bỏ 10 dòng (chưa ghi `compat.md`) |
 | | Quản lý state | ✅ | aggregation theo cửa sổ; `numRowsTotal` 30–57 dòng |
 | | Exactly-once | ✅ | checkpoint offset Kafka + commit Iceberg; upsert idempotent theo `_id` (MongoDB) |

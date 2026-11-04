@@ -343,6 +343,8 @@ def evaluated(spark):
         "expected string, clean_value string, noisy_value string, extra_json string",
     )
     judged = noise_lab.judge(truth, postings, quarantine)
+    errs = noise_lab.wrong(judged).collect()
+    assert all(not r["present"] or r["noise_type"] for r in errs)
     m = {(r["mode"], r["noise_type"]): r for r in noise_lab.metrics(judged).collect()}
     gi = {
         r["mode"]: r
