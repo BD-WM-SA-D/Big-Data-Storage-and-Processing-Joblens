@@ -96,6 +96,7 @@ Schema message `job_posting.v1` và contract các bảng nằm ở repo `joblens
 |---|---|---|---|---|
 | Thô | `s3://joblens/raw/vietjobs/` | file CSV gốc | – | `upload-vietjobs.sh` |
 | Bronze | `iceberg.bronze.jobs_raw` | một message Kafka (giữ cả bản trùng, payload JSON nguyên trạng) | `days(ingest_ts), source`; định danh `kafka_topic, kafka_partition, kafka_offset` | `bronze_jobs.py` (streaming), `vietjobs.py --sink bronze` (batch) |
+| Bronze | `iceberg.bronze.ingest_errors` | một message bị loại khi nạp, kèm lý do (`invalid_json`, `missing:<cột>`) | `days(ingest_ts)` | `bronze_jobs.py` |
 | Silver | `iceberg.silver.job_postings` | một tin (`job_uid = sha1(source:source_job_id)`), bản crawl mới nhất, đã chuẩn hóa lương VND/tháng, mã tỉnh (34 tỉnh sau 2025), kinh nghiệm, cấp bậc, loại hình | `months(first_seen_ts), bucket(16, job_uid)`; merge-on-read | `silver_job_postings.py` (MERGE INTO) |
 | Silver | `iceberg.silver.job_postings_snapshot` | trạng thái một tin trong một ngày | `days(snapshot_date)` | `silver_job_postings.py` |
 | Gold | `iceberg.gold.mart_salary_role_region` | tháng × nhóm nghề × cấp bậc × tỉnh (có dòng tổng `ALL`): số tin, phân vị lương, tỉ lệ thỏa thuận | `month` | dbt |

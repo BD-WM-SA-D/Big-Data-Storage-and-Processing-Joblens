@@ -118,6 +118,24 @@ def test_bad_messages_are_flagged(spark):
     assert out.filter(~F.col("_valid")).count() == 2
 
 
+def test_bad_messages_go_to_ingest_errors_with_reason(spark):
+    good = fixtures()[0]
+    missing = {k: v for k, v in good.items() if k not in ("content_hash", "crawl_ts")}
+    cut = json.dumps(good)[
+        :60
+    ].encode()  # JSON bị cắt cụt (thí nghiệm nhiễu: broken_json)
+    rows = kafka_rows([good, missing]) + [(b"x", cut, "jobs.raw.topcv.v1", 0, 99)]
+    errs = bronze_jobs.errors(bronze_jobs.to_bronze(make_df(spark, rows))).collect()
+    assert [c for c in bronze_jobs.ERROR_COLUMNS] == list(errs[0].asDict())
+    by_offset = {r["kafka_offset"]: r for r in errs}
+    assert (
+        by_offset[99]["reason"] == "invalid_json" and by_offset[99]["kafka_key"] == "x"
+    )
+    assert by_offset[99]["value_prefix"] == cut.decode()
+    other = [r for r in errs if r["kafka_offset"] != 99][0]
+    assert other["reason"] == "missing:crawl_ts,content_hash"
+
+
 def test_key_falls_back_to_value(spark):
     rec = fixtures()[0]
     rows = [(None, json.dumps(rec).encode(), "jobs.raw.topcv.v1", 0, 0)]

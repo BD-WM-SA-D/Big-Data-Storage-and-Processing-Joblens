@@ -280,3 +280,52 @@ def test_fixtures_normalize():
         assert isinstance(o["skill_tags"], list) and isinstance(
             o["location_codes"], list
         )
+
+
+# ---------------------------------------------------------------- xử lý nhiễu (docs/thi-nghiem-nhieu.md phần 2)
+def test_clean_text():
+    assert N.clean_text("Hà Nội") == "Hà Nội"  # tiếng Việt đúng giữ nguyên
+    assert (
+        N.clean_text("Hà Nội".encode("utf-8").decode("latin-1")) == "Hà Nội"
+    )  # mojibake
+    assert N.clean_text("<b>R &amp; D</b>&nbsp;") == "R & D"
+    assert N.clean_text("  Kế \t toán \n tổng hợp ") == "Kế toán tổng hợp"
+    import unicodedata
+
+    assert N.clean_text(unicodedata.normalize("NFD", "Kỹ sư")) == "Kỹ sư"
+    assert N.clean_text(None) is None
+
+
+def test_osa_distance():
+    assert N.osa_distance("hanoi", "hanoi") == 0
+    assert N.osa_distance("hanoi", "hanooi") == 1
+    assert N.osa_distance("hanoi", "hnaoi") == 1  # đảo hai ký tự kề
+    assert N.osa_distance("hanoi", "danang", limit=1) == 2  # quá giới hạn → limit + 1
+
+
+def test_location_typos_and_city_suffix():
+    assert N.location_codes(["hà nộii"]) == ["01"]
+    assert N.location_codes(["đà nẵngg"]) == ["48"]
+    assert N.location_codes(["Da Nang City"]) == ["48"]
+    assert N.location_codes(["SG"]) == []  # 2 ký tự: không đoán
+    assert N.location_codes(["hà nộii"], robust=False) == []  # cách làm cũ
+
+
+def test_salary_yearly_billion_and_outlier():
+    assert N.parse_salary("180 - 300 triệu/năm")[:2] == (15_000_000, 25_000_000)
+    assert N.parse_salary("Lương 1,2 tỷ/năm")[:2] == (100_000_000, 100_000_000)
+    assert N.parse_salary("Tỷ lệ hoa hồng 5 triệu")[:2] == (5_000_000, 5_000_000)
+    assert N.parse_salary("1500 - 2200 triệu")[:2] == (
+        None,
+        None,
+    )  # > 300 triệu/tháng: ngoại lai
+    assert N.parse_salary("180 - 300 triệu/năm", robust=False)[:2] == (
+        180_000_000,
+        300_000_000,
+    )
+
+
+def test_experience_cap():
+    assert N.parse_experience("99 năm") == (None, None)
+    assert N.parse_experience("99 năm", robust=False) == (99.0, 99.0)
+    assert N.parse_experience("3 năm") == (3.0, 3.0)

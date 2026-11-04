@@ -7,9 +7,18 @@ Bước `inject` (phần 1): đọc VietJobs → message job_posting.v1 sạch (
   lake.lab.noise_runs      mỗi lượt một dòng: tỉ lệ, seed, số tin, số tin nhiễu theo loại
 Mỗi lượt có run_id (mặc định r<tỉ lệ %>_s<seed>), chạy lại cùng run_id thì ghi đè đúng phần của lượt đó.
 
+Bước `clean` (phần 2): cho message của từng lượt đi qua ĐÚNG mã của pipeline thật – to_bronze (tách message hỏng
+kèm lý do), build_updates của silver (giữ bản crawl mới nhất mỗi job_uid, chuẩn hóa) – ở hai chế độ:
+  baseline   chuẩn hóa như trước phần 2 (normalize robust=False), message hỏng bị bỏ im lặng
+  robust     chuẩn hóa mới (làm sạch chuỗi, lương năm, tỉnh gõ sai, loại ngoại lai), message hỏng vào cách ly
+và ghi
+  lake.lab.job_postings    kết quả silver của lượt × chế độ
+  lake.lab.quarantine      message hỏng kèm lý do (chế độ robust)
+
 Chạy:  EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab inject --rate 0.2 --seed 42
        (thêm --limit 5000 để thử nhanh)
-Các bước sau (xử lý nhiễu, đo) thêm vào job này ở phần 2, 3.
+       EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab clean      # mọi lượt, cả hai chế độ
+Bước đo (phần 3) thêm vào job này sau.
 """
 
 from __future__ import annotations
@@ -28,6 +37,13 @@ NS = f"{CATALOG}.lab"
 MESSAGES = f"{NS}.noisy_messages"
 TRUTH = f"{NS}.noise_truth"
 RUNS = f"{NS}.noise_runs"
+POSTINGS = f"{NS}.job_postings"
+QUARANTINE = f"{NS}.quarantine"
+MODES = ("baseline", "robust")
+POSTING_COLUMNS = [
+    "run_id", "mode", "job_uid", "source_job_id", "crawl_ts", "title", "salary_min_vnd", "salary_max_vnd",
+    "salary_is_negotiable", "location_codes", "experience_min_years", "level_code",
+]  # fmt: skip
 
 DDL = [
     f"""CREATE TABLE IF NOT EXISTS {MESSAGES} (
@@ -39,6 +55,17 @@ DDL = [
         field STRING, expected STRING, clean_value STRING, noisy_value STRING, extra_json STRING
     ) USING iceberg PARTITIONED BY (run_id)
     TBLPROPERTIES ('format-version' = '2', 'comment' = 'Thí nghiệm nhiễu: đáp án từng tin bị nhiễu')""",
+    f"""CREATE TABLE IF NOT EXISTS {POSTINGS} (
+        run_id STRING NOT NULL, mode STRING NOT NULL, job_uid STRING NOT NULL, source_job_id STRING NOT NULL,
+        crawl_ts TIMESTAMP, title STRING, salary_min_vnd BIGINT, salary_max_vnd BIGINT,
+        salary_is_negotiable BOOLEAN, location_codes ARRAY<STRING>, experience_min_years DOUBLE, level_code STRING
+    ) USING iceberg PARTITIONED BY (run_id, mode)
+    TBLPROPERTIES ('format-version' = '2', 'comment' = 'Thí nghiệm nhiễu: kết quả silver theo lượt và chế độ')""",
+    f"""CREATE TABLE IF NOT EXISTS {QUARANTINE} (
+        run_id STRING NOT NULL, mode STRING NOT NULL, seq BIGINT, kafka_key STRING, reason STRING,
+        value_prefix STRING
+    ) USING iceberg PARTITIONED BY (run_id, mode)
+    TBLPROPERTIES ('format-version' = '2', 'comment' = 'Thí nghiệm nhiễu: message hỏng bị cách ly kèm lý do')""",
     f"""CREATE TABLE IF NOT EXISTS {RUNS} (
         run_id STRING NOT NULL, rate DOUBLE, seed INT, messages BIGINT, noisy BIGINT,
         by_type_json STRING, created_at TIMESTAMP
@@ -124,6 +151,113 @@ def inject(spark, args) -> None:
         log.info("  %-20s %6d", k, v)
 
 
+def as_kafka(messages):
+    """lab.noisy_messages → DataFrame giống nguồn Kafka (topic, partition, offset = seq, key, value)."""
+    from pyspark.sql import functions as F
+
+    return messages.select(
+        F.lit("lab.noise").alias("topic"),
+        F.lit(0).alias("partition"),
+        F.col("seq").alias("offset"),
+        F.col("kafka_key").cast("binary").alias("key"),
+        F.col("value").cast("binary").alias("value"),
+    )
+
+
+def process(messages, run_id: str, mode: str, now: datetime):
+    """Một lượt × một chế độ → (DataFrame lab.job_postings, DataFrame lab.quarantine). Dùng lại mã pipeline thật."""
+    from pyspark.sql import functions as F
+
+    import bronze_jobs
+    import silver_job_postings as S
+
+    rows = bronze_jobs.to_bronze(
+        as_kafka(messages), ingest_ts=F.lit(now).cast("timestamp")
+    )
+    good = rows.filter(F.col("_valid")).select(*bronze_jobs.BRONZE_COLUMNS)
+    silver = S.build_updates(
+        good, now=now, normalizer=S.make_normalize_udf(mode == "robust")
+    )
+    postings = silver.select(
+        F.lit(run_id).alias("run_id"),
+        F.lit(mode).alias("mode"),
+        "job_uid",
+        "source_job_id",
+        F.col("last_seen_ts").alias("crawl_ts"),
+        "title",
+        "salary_min_vnd",
+        "salary_max_vnd",
+        "salary_is_negotiable",
+        "location_codes",
+        "experience_min_years",
+        "level_code",
+    )
+    bad = bronze_jobs.errors(rows)
+    if mode == "baseline":  # pipeline cũ bỏ im lặng – không có gì để cách ly
+        bad = bad.limit(0)
+    quarantine = bad.select(
+        F.lit(run_id).alias("run_id"),
+        F.lit(mode).alias("mode"),
+        F.col("kafka_offset").alias("seq"),
+        "kafka_key",
+        "reason",
+        "value_prefix",
+    )
+    return postings, quarantine
+
+
+def clean(spark, args) -> None:
+    from pyspark.sql import functions as F
+
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NS}")
+    for ddl in DDL:
+        spark.sql(ddl)
+    runs = (
+        args.runs.split(",")
+        if args.runs
+        else [
+            r.run_id
+            for r in spark.table(RUNS).select("run_id").orderBy("run_id").collect()
+        ]
+    )
+    modes = args.modes.split(",")
+    now = datetime.now(timezone.utc)
+    for run_id in runs:
+        messages = spark.table(MESSAGES).filter(F.col("run_id") == run_id).persist()
+        if messages.isEmpty():
+            log.warning("lượt %s không có message – bỏ qua (chạy inject trước)", run_id)
+            continue
+        for mode in modes:
+            postings, quarantine = process(messages, run_id, mode, now)
+            postings.writeTo(POSTINGS).overwritePartitions()
+            spark.sql(
+                f"DELETE FROM {QUARANTINE} WHERE run_id = '{run_id}' AND mode = '{mode}'"
+            )
+            quarantine.writeTo(QUARANTINE).append()
+            stats = (
+                spark.table(POSTINGS)
+                .filter((F.col("run_id") == run_id) & (F.col("mode") == mode))
+                .agg(
+                    F.count("*").alias("tin"),
+                    F.count("salary_min_vnd").alias("co_luong"),
+                    F.sum(F.when(F.size("location_codes") > 0, 1).otherwise(0)).alias(
+                        "co_tinh"
+                    ),
+                )
+                .first()
+            )
+            q = (
+                spark.table(QUARANTINE)
+                .filter((F.col("run_id") == run_id) & (F.col("mode") == mode))
+                .count()
+            )
+            log.info(
+                "lượt %s, chế độ %-8s: %s tin silver, %s có lương, %s có tỉnh, %s message cách ly",
+                run_id, mode, stats["tin"], stats["co_luong"], stats["co_tinh"], q,
+            )  # fmt: skip
+        messages.unpersist()
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Thí nghiệm nhiễu trên namespace lab")
     sub = p.add_subparsers(dest="step", required=True)
@@ -135,6 +269,15 @@ def main(argv: list[str] | None = None) -> None:
     pi.add_argument("--rate", type=float, default=0.2, help="Tỉ lệ tin bị nhiễu (0–1)")
     pi.add_argument("--seed", type=int, default=42)
     pi.add_argument("--run-id", default=None)
+    pc = sub.add_parser(
+        "clean", help="Phần 2: chạy pipeline baseline và robust trên dữ liệu nhiễu"
+    )
+    pc.add_argument(
+        "--runs",
+        default=None,
+        help="Danh sách run_id cách nhau dấu phẩy (mặc định: mọi lượt)",
+    )
+    pc.add_argument("--modes", default=",".join(MODES))
     args = p.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -145,6 +288,8 @@ def main(argv: list[str] | None = None) -> None:
     spark = bronze_jobs.build_session(f"noise-lab-{args.step}")
     if args.step == "inject":
         inject(spark, args)
+    elif args.step == "clean":
+        clean(spark, args)
 
 
 if __name__ == "__main__":

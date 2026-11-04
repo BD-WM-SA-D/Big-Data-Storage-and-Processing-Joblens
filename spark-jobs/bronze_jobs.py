@@ -78,6 +78,34 @@ TBLPROPERTIES (
 )
 """
 
+ERRORS_TABLE = f"{CATALOG}.bronze.ingest_errors"
+ERRORS_DDL = f"""
+CREATE TABLE IF NOT EXISTS {ERRORS_TABLE} (
+    kafka_topic     STRING    NOT NULL,
+    kafka_partition INT       NOT NULL,
+    kafka_offset    BIGINT    NOT NULL,
+    ingest_ts       TIMESTAMP NOT NULL,
+    kafka_key       STRING,
+    reason          STRING    NOT NULL COMMENT 'invalid_json | missing:<cột,…>',
+    value_prefix    STRING             COMMENT '2000 ký tự đầu của message'
+)
+USING iceberg
+PARTITIONED BY (days(ingest_ts))
+TBLPROPERTIES (
+    'format-version' = '2',
+    'comment' = 'Message bị loại khi nạp bronze, kèm lý do (bảng nội bộ của repo Big Data – không có contract)'
+)
+"""
+ERROR_COLUMNS = [
+    "kafka_topic",
+    "kafka_partition",
+    "kafka_offset",
+    "ingest_ts",
+    "kafka_key",
+    "reason",
+    "value_prefix",
+]
+
 log = logging.getLogger("bronze_jobs")
 
 
@@ -106,11 +134,37 @@ def to_bronze(kafka_df: DataFrame, ingest_ts: Column | None = None) -> DataFrame
         msg["content_hash"].alias("content_hash"),
         msg["raw_html_uri"].alias("raw_html_uri"),
         F.get_json_object(value, "$.payload").alias("payload_json"),
+        value.alias("_value"),
+        F.col("key").cast("string").alias("_key"),
     )
     valid = F.lit(True)
     for c in REQUIRED:
         valid = valid & F.col(c).isNotNull()
-    return out.withColumn("_valid", valid)
+    missing = F.concat_ws(",", *[F.when(F.col(c).isNull(), F.lit(c)) for c in REQUIRED])
+    reason = (
+        F.when(valid, F.lit(None).cast("string"))
+        .when(F.try_parse_json("_value").isNull(), F.lit("invalid_json"))
+        .otherwise(F.concat(F.lit("missing:"), missing))
+    )
+    return (
+        out.withColumn("_valid", valid)
+        .withColumn("_reason", reason)
+        .withColumn("_value_prefix", F.substring("_value", 1, 2000))
+        .drop("_value")
+    )
+
+
+def errors(rows: DataFrame) -> DataFrame:
+    """Dòng bị loại của to_bronze → cột của bronze.ingest_errors (cách ly kèm lý do, thay vì bỏ im lặng)."""
+    return rows.filter(~F.col("_valid")).select(
+        "kafka_topic",
+        "kafka_partition",
+        "kafka_offset",
+        "ingest_ts",
+        F.col("_key").alias("kafka_key"),
+        F.col("_reason").alias("reason"),
+        F.col("_value_prefix").alias("value_prefix"),
+    )
 
 
 def build_session(app_name: str = "bronze-jobs") -> SparkSession:
@@ -163,6 +217,7 @@ def main(argv: list[str] | None = None) -> None:
     spark = build_session()
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.bronze")
     spark.sql(DDL)
+    spark.sql(ERRORS_DDL)
 
     kafka_df = (
         spark.readStream.format("kafka")
@@ -178,13 +233,16 @@ def main(argv: list[str] | None = None) -> None:
 
     def write_batch(batch: DataFrame, batch_id: int) -> None:
         batch = batch.persist()
-        bad = batch.filter(~F.col("_valid")).count()
+        bad_rows = errors(batch)
+        bad = bad_rows.count()
         good = batch.filter(F.col("_valid")).select(*BRONZE_COLUMNS)
         n = good.count()
         if n:
             good.writeTo(TABLE).append()
+        if bad:  # cách ly kèm lý do (bronze.ingest_errors) – trước đây chỉ đếm rồi bỏ
+            bad_rows.writeTo(ERRORS_TABLE).append()
         log.info(
-            "batch %s: ghi %s dòng, loại %s dòng thiếu trường bắt buộc",
+            "batch %s: ghi %s dòng, cách ly %s dòng hỏng/thiếu trường vào bronze.ingest_errors",
             batch_id,
             n,
             bad,

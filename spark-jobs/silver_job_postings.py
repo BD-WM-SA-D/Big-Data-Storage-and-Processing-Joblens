@@ -65,15 +65,21 @@ NORMALIZED_TYPE = T.StructType(
 )
 
 
-@F.udf(NORMALIZED_TYPE)
-def normalize_udf(
-    payload_json,
-):  # không ghi type hint: Spark hiểu nhầm thành pandas UDF
-    try:
-        payload = json.loads(payload_json) if payload_json else {}
-    except json.JSONDecodeError:
-        payload = {}
-    return normalize.normalize_payload(payload)
+def make_normalize_udf(robust: bool = True):
+    """UDF chuẩn hóa payload. robust=False: cách làm trước thí nghiệm nhiễu (chỉ dùng để đo so sánh trong noise_lab)."""
+
+    @F.udf(NORMALIZED_TYPE)
+    def _udf(payload_json):  # không ghi type hint: Spark hiểu nhầm thành pandas UDF
+        try:
+            payload = json.loads(payload_json) if payload_json else {}
+        except json.JSONDecodeError:
+            payload = {}
+        return normalize.normalize_payload(payload, robust=robust)
+
+    return _udf
+
+
+normalize_udf = make_normalize_udf(True)
 
 
 DDL_SILVER = f"""
@@ -113,7 +119,9 @@ TBLPROPERTIES ('format-version' = '2', 'comment' = 'Trạng thái tin mỗi ngà
 log = logging.getLogger("silver_job_postings")
 
 
-def build_updates(bronze: DataFrame, now: datetime | None = None) -> DataFrame:
+def build_updates(
+    bronze: DataFrame, now: datetime | None = None, normalizer=None
+) -> DataFrame:
     """Dòng bronze → một dòng silver cho mỗi job_uid (bản crawl mới nhất), đúng thứ tự cột SILVER_COLUMNS."""
     now_col = F.lit(now).cast("timestamp") if now else F.current_timestamp()
     rows = bronze.withColumn(
@@ -128,7 +136,7 @@ def build_updates(bronze: DataFrame, now: datetime | None = None) -> DataFrame:
         .withColumn("first_seen_ts", F.min("crawl_ts").over(span))
         .withColumn("last_seen_ts", F.max("crawl_ts").over(span))
         .filter("_rn = 1")
-        .withColumn("n", normalize_udf("payload_json"))
+        .withColumn("n", (normalizer or normalize_udf)("payload_json"))
     )
     return picked.select(
         "job_uid",

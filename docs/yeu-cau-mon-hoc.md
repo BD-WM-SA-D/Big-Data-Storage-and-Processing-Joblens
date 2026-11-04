@@ -87,7 +87,7 @@ liệu, **thêm nhiễu vào dữ liệu rồi xử lý nhiễu** – kế hoạ
 | | Hàm tổng hợp tùy biến | ✅ | `analytics_spark.trimmed_mean` (pandas UDF tổng hợp) |
 | 2. Biến đổi nâng cao | Nhiều giai đoạn, chuỗi thao tác | ✅ | Kafka → parse → chuẩn hóa → MERGE (`bronze_jobs.py`, `silver_job_postings.py`) |
 | | UDF cho logic nghiệp vụ | ✅ | `normalize_udf` (lương, 34 tỉnh, kinh nghiệm, cấp bậc) |
-| | *Biến đổi + xử lý nhiễu (yêu cầu thêm)* | 🧪 | phần 1 (tiêm nhiễu) – [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md) |
+| | *Biến đổi + xử lý nhiễu (yêu cầu thêm)* | 🧪 | `normalize.clean_text`, lương năm, tỉnh gõ sai, ngoại lai; `bronze.ingest_errors` – [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md) |
 | 3. Join | Broadcast join (dữ liệu lệch) | ✅ | `analytics_spark.explode_locations` – tin ⋈ 34 tỉnh; Hà Nội/TP.HCM chiếm phần lớn |
 | | Sort-merge join | ✅ | `analytics_spark.activity_join` – silver ⋈ snapshot theo `job_uid` (hint MERGE) |
 | | Tối ưu nhiều join | 🧪 | AQE bật trong `analytics_spark.py`; kế hoạch lưu S3 – **chưa đo** bật/tắt AQE, thứ tự join |
@@ -154,7 +154,7 @@ của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)).
 
 | # | Việc | Phục vụ | Trạng thái |
 |---|---|---|---|
-| 1 | Thí nghiệm nhiễu (mục 6, [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md)): tiêm nhiễu → xử lý → đo | Yêu cầu thêm; Spark nhóm 2; bài học nhóm 1, 9 | 🧪 phần 1 có mã + kiểm thử; phần 2, 3 ⬜ |
+| 1 | Thí nghiệm nhiễu (mục 6, [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md)): tiêm nhiễu → xử lý → đo | Yêu cầu thêm; Spark nhóm 2; bài học nhóm 1, 9 | ✅ phần 1 đã chạy; 🧪 phần 2 có mã + kiểm thử; phần 3 ⬜ |
 | 2 | Thí nghiệm batch vs streaming lần 2 (không `REUSE_A`, thêm trigger 1 phút) | ADR Kappa | ⬜ |
 | 3 | Đo số file bronze trước/sau `iceberg_maintenance` | ADR Kappa (điều kiện 3), bài học 4.1 | ⬜ |
 | 4 | Chạy `stream_province_windows --output-mode append`, ghi `deploy/compat.md` | Spark nhóm 5 | ⬜ |

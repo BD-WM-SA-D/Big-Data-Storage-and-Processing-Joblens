@@ -192,3 +192,113 @@ def test_build_rows_shapes(msgs):
     assert summ["messages"] == 300 and summ["noisy"] == len(truth_rows)
     assert sum(summ["by_type"].values()) == summ["noisy"]
     assert noise_lab.default_run_id(0.2, 42) == "r20_s42"
+
+
+# ---------------------------------------------------------------- phần 2: xử lý nhiễu
+@pytest.fixture(scope="module")
+def spark():
+    from pyspark.sql import SparkSession
+
+    return (
+        SparkSession.builder.master("local[2]")
+        .appName("test-noise")
+        .config("spark.sql.session.timeZone", "UTC")
+        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.ui.enabled", "false")
+        .getOrCreate()
+    )
+
+
+@pytest.fixture(scope="module")
+def processed(spark):
+    from datetime import datetime, timezone
+
+    clean_msgs = make_messages(600)
+    msg_rows, _, _ = noise_lab.build_rows(clean_msgs, 1.0, 13, "t")
+    _, truths = noise.inject(clean_msgs, 1.0, 13)
+    df = spark.createDataFrame(
+        msg_rows, "run_id string, seq long, kafka_key string, value string"
+    )
+    now = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    out = {}
+    for mode in noise_lab.MODES:
+        p, q = noise_lab.process(df, "t", mode, now)
+        out[mode] = ({r["source_job_id"]: r for r in p.collect()}, q.collect())
+    return clean_msgs, {t.source_job_id: t for t in truths}, out
+
+
+def test_process_columns(processed):
+    _, _, out = processed
+    row = next(iter(out["robust"][0].values()))
+    assert list(row.asDict()) == noise_lab.POSTING_COLUMNS
+
+
+def test_broken_messages_quarantined_only_in_robust(processed):
+    _, truths, out = processed
+    broken = {s for s, t in truths.items() if t.expected == "quarantine"}
+    assert broken and not (broken & set(out["robust"][0]))  # không lọt vào silver
+    q = out["robust"][1]
+    assert {r["kafka_key"] for r in q} == broken
+    reasons = {truths[r["kafka_key"]].noise_type: r["reason"] for r in q}
+    assert reasons["broken_json"] == "invalid_json"
+    assert (
+        reasons["missing_required"].startswith("missing:")
+        and "crawl_ts" in reasons["missing_required"]
+    )
+    assert out["baseline"][1] == []  # pipeline cũ bỏ im lặng
+
+
+def test_duplicates_and_out_of_order_handled(processed):
+    _, truths, out = processed
+    for sid, t in truths.items():
+        if t.noise_type == "out_of_order":
+            assert "(bản cũ)" not in out["robust"][0][sid]["title"]  # giữ bản mới
+            assert "(bản cũ)" not in out["baseline"][0][sid]["title"]
+
+
+def test_robust_recovers_field_noise(processed):
+    import normalize as N
+
+    clean_msgs, truths, out = processed
+    clean = {m["source_job_id"]: N.normalize_payload(m["payload"]) for m in clean_msgs}
+    fixed = {k: 0 for k in noise.FIELD_NOISE}
+    total = {k: 0 for k in noise.FIELD_NOISE}
+    for sid, t in truths.items():
+        if t.level != "field" or t.expected != "recover":
+            continue
+        r, c = out["robust"][0][sid], clean[sid]
+        total[t.noise_type] += 1
+        if t.field == "salary":
+            ok = (r["salary_min_vnd"], r["salary_max_vnd"]) == (
+                c["salary_min_vnd"],
+                c["salary_max_vnd"],
+            )
+        elif t.field == "location":
+            ok = list(r["location_codes"]) == c["location_codes"]
+        else:
+            ok = r["title"] == c["title"]
+        fixed[t.noise_type] += ok
+    for k in (
+        "salary_format",
+        "salary_yearly",
+        "salary_swap",
+        "encoding_mojibake",
+        "unicode_nfd",
+        "html_entities",
+        "whitespace",
+        "location_no_accent",
+    ):
+        if total[k]:
+            assert fixed[k] == total[k], k
+    if total["location_typo"]:
+        assert fixed["location_typo"] / total["location_typo"] >= 0.7
+
+
+def test_robust_flags_outliers(processed):
+    _, truths, out = processed
+    for sid, t in truths.items():
+        r = out["robust"][0].get(sid)
+        if t.noise_type == "salary_outlier":
+            assert r["salary_min_vnd"] is None and r["salary_max_vnd"] is None
+        if t.noise_type == "experience_outlier":
+            assert r["experience_min_years"] is None

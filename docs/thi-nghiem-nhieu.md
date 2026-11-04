@@ -7,7 +7,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 | Phần | Vai trò | Trạng thái |
 |---|---|---|
 | 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm: 4 lượt 0/10/20/40% |
-| 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ⬜ |
+| 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | 🧪 mã + kiểm thử xong (207 kiểm thử toàn repo đạt); chờ chạy trên cụm |
 | 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ⬜ |
 
 **Ranh giới (ADR 0001 joblens):** chỉ đụng các trường mà repo này chuẩn hóa (D2: lương, địa điểm, kinh nghiệm, tiêu đề)
@@ -113,11 +113,76 @@ trong danh mục viết tắt; 4 loại nhiễu message áp dụng được cho 
 
 ## Phần 2 – Xử lý nhiễu
 
-⬜ Chưa làm. Dự kiến: làm sạch văn bản (NFC, sửa mojibake, bỏ thẻ/entity HTML, gộp khoảng trắng), phân tích lương
-lương năm → tháng, so khớp tỉnh chịu lỗi chính tả (khoảng cách chỉnh sửa trên danh mục alias) + bổ sung viết tắt, phát
-hiện ngoại lai (khoảng cứng + median ± k·MAD theo cấp bậc × vùng), bảng cách ly message hỏng kèm mã lý do (thay cho loại
-bỏ im lặng ở bronze), kỳ vọng GX về tỉ lệ cách ly và ngoại lai. Cột mới ở silver thật (cờ ngoại lai) cần thêm contract
-ở `joblens` trước.
+**Vai trò.** Biến đổi dữ liệu để pipeline **chịu được nhiễu**: sửa những gì sửa được về đúng giá trị, không đưa giá trị
+vô lý vào thống kê, và không làm mất dấu message hỏng. Phần này sửa **mã của pipeline thật** (không phải mã riêng cho
+thí nghiệm) – nên dữ liệu thật cũng sạch hơn; thí nghiệm chỉ giữ lại cách làm cũ (`robust=False`) để đo so sánh.
+
+**Đã thay đổi gì**
+
+| Bước | Ở đâu | Xử lý loại nhiễu |
+|---|---|---|
+| Làm sạch chuỗi: sửa mojibake (chỉ khi chuỗi mã hóa lại được Latin-1 và giải mã được UTF-8 – tiếng Việt đúng không bị đụng), bỏ thẻ/entity HTML, NFC, gộp khoảng trắng | `normalize.clean_text` – áp cho tiêu đề, chuỗi lương, địa điểm, kinh nghiệm, cấp bậc, hình thức | `encoding_mojibake`, `unicode_nfd`, `html_entities`, `whitespace` |
+| Lương năm → tháng (`/năm`, `mỗi năm`, `per year`…); đơn vị `tỷ` | `normalize.parse_salary` | `salary_yearly` |
+| Ngưỡng ngoại lai lương tháng: trên **300 triệu** → null (trước là 2 tỷ) | `normalize.SALARY_MAX_VALID`; kỳ vọng GX dùng cùng hằng số | `salary_outlier` |
+| Kinh nghiệm trên **40 năm** → null (khớp kỳ vọng GX ≤ 40) | `normalize.parse_experience` | `experience_outlier` |
+| So khớp tỉnh chịu lỗi gõ: khoảng cách chỉnh sửa (có hoán vị) ≤ 1 trên danh mục alias, chỉ khóa ≥ 5 ký tự và chỉ khi mọi ứng viên cùng một mã tỉnh; bỏ hậu tố `City`/`Province` | `normalize.fuzzy_location`, `osa_distance`, `place_key` | `location_typo`, một phần `location_abbrev` |
+| Cách ly message hỏng **kèm lý do** (`invalid_json`, `missing:<cột>`) thay cho đếm rồi bỏ | `bronze_jobs.to_bronze` + `errors()`; bảng mới `bronze.ingest_errors` (bảng nội bộ của repo, không cần contract) | `broken_json`, `missing_required` |
+| Bản trùng y hệt, bản cũ đến sau | **Đã có từ trước**: silver giữ bản `crawl_ts` mới nhất mỗi `job_uid` (`silver_job_postings.build_updates`) | `duplicate`, `out_of_order` |
+
+Không làm (có chủ đích): viết tắt 2 ký tự (`SG`, `ĐN`, `HP`, `CT`) không được đoán – quá mơ hồ, và không thêm chúng vào
+danh mục alias chỉ để thí nghiệm đạt điểm (sẽ là "học thuộc đề"). Trùng gần giống giữa các trang: Web Mining (D5).
+
+**Thí nghiệm dùng lại đúng mã pipeline.** Bước `noise_lab.py clean` cho message của mỗi lượt đi qua `to_bronze` →
+`build_updates` của silver ở hai chế độ, ghi `lab.job_postings` (kết quả silver) và `lab.quarantine` (message cách ly):
+
+| Chế độ | Chuẩn hóa | Message hỏng |
+|---|---|---|
+| `baseline` | như trước phần 2 (`normalize_payload(robust=False)`) | bỏ im lặng (không ghi cách ly) |
+| `robust` | mới (mặc định của pipeline thật) | `lab.quarantine` kèm lý do |
+
+**Kiểm thử:** `tests/test_noise.py` thêm 5 kiểm thử chạy Spark cục bộ (message hỏng chỉ vào cách ly ở chế độ robust và
+đúng lý do; bản cũ đến sau bị bỏ; chế độ robust khôi phục 100% các loại `salary_format/yearly/swap`, `encoding_mojibake`,
+`unicode_nfd`, `html_entities`, `whitespace`, `location_no_accent`, ≥ 70% `location_typo`; ngoại lai bị loại);
+`tests/test_normalize.py` thêm 5, `tests/test_bronze_jobs.py` thêm 1. Toàn repo: `uv run pytest -q` → 207 passed, 1 skipped.
+
+**Xem trước trên dữ liệu tổng hợp** (3.000 tin của kiểm thử, **không phải VietJobs**; tỉ lệ tin chuẩn hóa ra đúng như
+tin sạch, hoặc bị loại đúng khi là ngoại lai/mất thông tin):
+
+| Loại nhiễu | Trước phần 2 | Sau phần 2 |
+|---|---|---|
+| `salary_format`, `salary_swap`, `salary_placeholder`, `location_no_accent`, `missing_fields` | 100% | 100% |
+| `salary_yearly` | 0% | 100% |
+| `salary_outlier` | 66% | 100% |
+| `location_typo` | 0% | 87% |
+| `location_abbrev` | 27% | 65% |
+| `encoding_mojibake`, `unicode_nfd`, `html_entities`, `whitespace`, `experience_outlier` | 0% | 100% |
+
+Số đo trên VietJobs: phần 3.
+
+**Ảnh hưởng tới pipeline thật** (cần biết trước khi chạy):
+- Lần chạy `silver_job_postings` tiếp theo dùng chuẩn hóa mới cho **dòng bronze mới**; dòng silver cũ giữ cách chuẩn hóa
+  cũ cho tới khi chạy lại toàn bộ: `EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh silver_job_postings --full`.
+- Tin thật có lương > 300 triệu/tháng hoặc kinh nghiệm > 40 năm sẽ thành null – số tin bị ảnh hưởng: `<cần đo>`
+  (phần 3 đếm trên lượt `r0_s42`).
+- Job streaming `bronze_jobs` ghi thêm `bronze.ingest_errors`; job đang chạy phải khởi động lại mới dùng mã mới.
+
+**Chạy trên cụm**
+```bash
+EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab clean            # 4 lượt × 2 chế độ
+# hoặc một lượt: … noise_lab clean --runs r20_s42
+```
+✅ Log mỗi lượt × chế độ một dòng
+`lượt r20_s42, chế độ robust  : … tin silver, … có lương, … có tỉnh, … message cách ly`; kết thúc `==> Xong`.
+
+Kiểm tra:
+```sql
+SELECT run_id, mode, count(*) AS tin, count(salary_min_vnd) AS co_luong,
+       count_if(cardinality(location_codes) > 0) AS co_tinh
+FROM iceberg.lab.job_postings GROUP BY 1, 2 ORDER BY 1, 2;
+SELECT run_id, reason, count(*) AS so_message FROM iceberg.lab.quarantine GROUP BY 1, 2 ORDER BY 1, 2;
+```
+
+**Số liệu trên VietJobs:** `<cần đo>`.
 
 ## Phần 3 – Đo
 
