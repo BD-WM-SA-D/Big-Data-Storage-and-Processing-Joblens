@@ -806,6 +806,113 @@
         "type": "trino-datasource",
         "uid": "trino"
       }
+    },
+    {
+      "type": "text",
+      "title": "",
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 2
+      },
+      "id": 106,
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Thí nghiệm nhiễu** (docs/thi-nghiem-nhieu.md): tiêm 18 loại nhiễu có đáp án vào VietJobs, chạy pipeline cũ (baseline) và pipeline có xử lý nhiễu (robust), đo so với đáp án. Bảng `iceberg.lab.*` – cần chạy `noise_lab inject / clean / evaluate` trước."
+      }
+    },
+    {
+      "id": 107,
+      "type": "barchart",
+      "title": "Tỉ lệ xử lý đúng theo loại nhiễu – lượt 20% (%)",
+      "description": "lab.noise_metrics: tin bị nhiễu được khôi phục đúng / gắn cờ / cách ly đúng như đáp án",
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 58,
+        "w": 14,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT noise_type AS loai_nhieu,\n  round(max(CASE WHEN mode = 'baseline' THEN rate END) * 100, 1) AS baseline,\n  round(max(CASE WHEN mode = 'robust' THEN rate END) * 100, 1) AS robust\nFROM iceberg.lab.noise_metrics WHERE run_id = 'r20_s42'\nGROUP BY 1 ORDER BY 1",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "xTickLabelRotation": 0,
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      }
+    },
+    {
+      "id": 108,
+      "type": "table",
+      "title": "Nhiễu làm lệch số liệu theo tỉnh (so với mốc sạch, %)",
+      "description": "lab.gold_impact: trung bình / lớn nhất % lệch trung vị lương và % lệch số tin theo tỉnh (tỉnh ≥ 200 tin có lương)",
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 58,
+        "w": 10,
+        "h": 12
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT run_id AS luot, mode AS che_do, provinces AS so_tinh,\n  median_salary_mape_pct AS lech_trung_vi_tb, median_salary_max_ape_pct AS lech_trung_vi_max,\n  job_count_mape_pct AS lech_so_tin_tb\nFROM iceberg.lab.gold_impact ORDER BY run_id, mode",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true
+      }
     }
   ],
   "templating": {

@@ -302,3 +302,107 @@ def test_robust_flags_outliers(processed):
             assert r["salary_min_vnd"] is None and r["salary_max_vnd"] is None
         if t.noise_type == "experience_outlier":
             assert r["experience_min_years"] is None
+
+
+# ---------------------------------------------------------------- phần 3: đo
+@pytest.fixture(scope="module")
+def evaluated(spark):
+    from datetime import datetime, timezone
+
+    from pyspark.sql import functions as F
+
+    clean_msgs = make_messages(800)
+    now = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    msg_frames, post_frames, q_frames, truth_rows = [], [], [], []
+    for run_id, rate in (("r0_s42", 0.0), ("r40_s42", 0.4)):
+        rows, truths, _ = noise_lab.build_rows(clean_msgs, rate, 42, run_id)
+        truth_rows += truths
+        df = spark.createDataFrame(
+            rows, "run_id string, seq long, kafka_key string, value string"
+        )
+        msg_frames.append(df)
+        for mode in noise_lab.MODES:
+            p, q = noise_lab.process(df, run_id, mode, now)
+            post_frames.append(p)
+            q_frames.append(q)
+
+    def union(frames):
+        out = frames[0]
+        for f in frames[1:]:
+            out = out.unionByName(f)
+        return out.cache()
+
+    postings, quarantine, messages = (
+        union(post_frames),
+        union(q_frames),
+        union(msg_frames),
+    )
+    truth = spark.createDataFrame(
+        truth_rows,
+        "run_id string, source_job_id string, noise_type string, level string, field string, "
+        "expected string, clean_value string, noisy_value string, extra_json string",
+    )
+    judged = noise_lab.judge(truth, postings, quarantine)
+    m = {(r["mode"], r["noise_type"]): r for r in noise_lab.metrics(judged).collect()}
+    gi = {
+        r["mode"]: r
+        for r in noise_lab.gold_impact(postings, min_salary_jobs=10).collect()
+        if r["run_id"] == "r40_s42"
+    }
+    diffs = noise_lab.clean_diffs(postings, messages).collect()
+    return (
+        m,
+        gi,
+        diffs,
+        judged.filter(F.col("mode") == "robust").count(),
+        len(truth_rows),
+    )
+
+
+def test_every_truth_row_is_judged_once_per_mode(evaluated):
+    m, _, _, n_robust, n_truth = evaluated
+    assert n_robust == n_truth
+    assert sum(r["total"] for (mode, _), r in m.items() if mode == "robust") == n_truth
+
+
+def test_robust_beats_baseline_where_expected(evaluated):
+    m, _, _, _, _ = evaluated
+
+    def rate(mode, t):
+        r = m.get((mode, t))
+        return None if r is None else r["ok"] / r["total"]
+
+    for t in (
+        "encoding_mojibake",
+        "html_entities",
+        "whitespace",
+        "salary_yearly",
+        "unicode_nfd",
+    ):
+        if rate("robust", t) is not None:
+            assert rate("robust", t) == 1.0 and rate("baseline", t) < 1.0, t
+    assert (
+        rate("robust", "broken_json") == 1.0 and rate("baseline", "broken_json") == 0.0
+    )
+    assert rate("robust", "duplicate") == 1.0 and rate("baseline", "duplicate") == 1.0
+    assert rate("robust", "out_of_order") == 1.0
+
+
+def test_gold_impact_columns(evaluated):
+    _, gi, _, _, _ = evaluated
+    assert set(gi) == {"baseline", "robust"}
+    for r in gi.values():
+        assert (
+            r["provinces"] >= 1
+            and r["median_salary_mape_pct"] >= 0
+            and r["job_count_mape_pct"] >= 0
+        )
+    # nhiễu làm mất tỉnh của nhiều tin hơn khi không xử lý → số tin theo tỉnh lệch nhiều hơn
+    assert gi["robust"]["job_count_mape_pct"] <= gi["baseline"]["job_count_mape_pct"]
+
+
+def test_clean_diffs_on_clean_synthetic_data_is_empty(evaluated):
+    _, _, diffs, _, _ = evaluated
+    assert (
+        diffs == []
+    )  # dữ liệu tổng hợp sạch: robust và baseline phải cho cùng kết quả

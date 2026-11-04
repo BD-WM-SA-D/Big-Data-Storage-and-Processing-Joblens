@@ -18,7 +18,11 @@ và ghi
 Chạy:  EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab inject --rate 0.2 --seed 42
        (thêm --limit 5000 để thử nhanh)
        EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab clean      # mọi lượt, cả hai chế độ
-Bước đo (phần 3) thêm vào job này sau.
+Bước `evaluate` (phần 3): so kết quả với đáp án và với lượt sạch `r0_s42` CÙNG chế độ (mốc), ghi
+  lake.lab.noise_metrics   theo lượt × chế độ × loại nhiễu: số tin, số xử lý đúng, tỉ lệ
+  lake.lab.gold_impact     nhiễu làm lệch trung vị lương / số tin theo tỉnh bao nhiêu so với mốc sạch
+  lake.lab.clean_diffs     trên dữ liệu SẠCH, tin nào robust cho kết quả khác baseline (để kiểm tra nhầm)
+       EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab evaluate
 """
 
 from __future__ import annotations
@@ -40,6 +44,13 @@ RUNS = f"{NS}.noise_runs"
 POSTINGS = f"{NS}.job_postings"
 QUARANTINE = f"{NS}.quarantine"
 MODES = ("baseline", "robust")
+METRICS = f"{NS}.noise_metrics"
+GOLD_IMPACT = f"{NS}.gold_impact"
+CLEAN_DIFFS = f"{NS}.clean_diffs"
+REFERENCE_RUN = "r0_s42"
+MIN_SALARY_JOBS = (
+    200  # như ô Grafana "Lương trung vị theo tỉnh": chỉ tỉnh có ≥ 200 tin có lương
+)
 POSTING_COLUMNS = [
     "run_id", "mode", "job_uid", "source_job_id", "crawl_ts", "title", "salary_min_vnd", "salary_max_vnd",
     "salary_is_negotiable", "location_codes", "experience_min_years", "level_code",
@@ -258,6 +269,242 @@ def clean(spark, args) -> None:
         messages.unpersist()
 
 
+def judge(truth, postings, quarantine, reference_run: str = REFERENCE_RUN):
+    """Mỗi dòng đáp án × mỗi chế độ → cột `ok` (pipeline xử lý đúng loại nhiễu đó hay không).
+
+    Mốc so sánh: kết quả của CÙNG chế độ trên lượt sạch (reference_run) – để chỉ đo ảnh hưởng của nhiễu, không lẫn
+    khác biệt giữa hai cách chuẩn hóa.
+    """
+    from pyspark.sql import functions as F
+
+    modes = postings.sparkSession.createDataFrame([(m,) for m in MODES], "mode string")
+    cols = [
+        "title",
+        "salary_min_vnd",
+        "salary_max_vnd",
+        "location_codes",
+        "experience_min_years",
+    ]
+    ref = postings.filter(F.col("run_id") == reference_run).select(
+        "mode", "source_job_id", *[F.col(c).alias(f"ref_{c}") for c in cols]
+    )
+    out = postings.select(
+        "run_id", "mode", "source_job_id", F.lit(True).alias("present"), *cols
+    )
+    q = quarantine.select(
+        "run_id", "mode", F.col("kafka_key").alias("source_job_id")
+    ).distinct()
+    q = q.withColumn("quarantined", F.lit(True))
+    j = (
+        truth.crossJoin(modes)
+        .join(out, ["run_id", "mode", "source_job_id"], "left")
+        .join(ref, ["mode", "source_job_id"], "left")
+        .join(q, ["run_id", "mode", "source_job_id"], "left")
+    )
+    present = F.coalesce(F.col("present"), F.lit(False))
+    salary_eq = F.col("salary_min_vnd").eqNullSafe(F.col("ref_salary_min_vnd")) & F.col(
+        "salary_max_vnd"
+    ).eqNullSafe(F.col("ref_salary_max_vnd"))
+    loc_eq = F.col("location_codes").eqNullSafe(F.col("ref_location_codes"))
+    title_eq = F.col("title").eqNullSafe(F.col("ref_title"))
+    no_salary = F.col("salary_min_vnd").isNull() & F.col("salary_max_vnd").isNull()
+    e, f = F.col("expected"), F.col("field")
+    ok = (
+        F.when((e == "recover") & (f == "salary"), present & salary_eq)
+        .when((e == "recover") & (f == "location"), present & loc_eq)
+        .when((e == "recover") & (f == "title"), present & title_eq)
+        .when(
+            (e == "recover"), present & title_eq & loc_eq & salary_eq
+        )  # title+location+salary
+        .when((e == "flag") & (f == "salary"), present & no_salary)
+        .when((e == "flag"), present & F.col("experience_min_years").isNull())
+        .when((e == "unknown") & (f == "salary"), present & no_salary)
+        .when((e == "unknown"), present & no_salary & (F.size("location_codes") == 0))
+        .when(e.isin("dedup", "keep_latest"), present & title_eq & salary_eq)
+        .when(
+            e == "quarantine", ~present & F.coalesce(F.col("quarantined"), F.lit(False))
+        )
+        .otherwise(F.lit(False))
+    )
+    return j.withColumn("ok", F.coalesce(ok, F.lit(False)))
+
+
+def metrics(judged):
+    from pyspark.sql import functions as F
+
+    return (
+        judged.groupBy("run_id", "mode", "noise_type", "expected")
+        .agg(F.count("*").alias("total"), F.sum(F.col("ok").cast("long")).alias("ok"))
+        .withColumn("rate", F.round(F.col("ok") / F.col("total"), 4))
+    )
+
+
+def province_stats(postings):
+    """Theo lượt × chế độ × tỉnh: số tin, số tin có lương, trung vị lương giữa khoảng (VND/tháng)."""
+    from pyspark.sql import functions as F
+
+    mid = (
+        F.coalesce("salary_min_vnd", "salary_max_vnd")
+        + F.coalesce("salary_max_vnd", "salary_min_vnd")
+    ) / 2
+    return (
+        postings.select(
+            "run_id",
+            "mode",
+            F.explode("location_codes").alias("location_code"),
+            mid.alias("mid"),
+        )
+        .groupBy("run_id", "mode", "location_code")
+        .agg(
+            F.count("*").alias("jobs"),
+            F.count("mid").alias("salary_jobs"),
+            F.median("mid").alias("median_salary"),
+        )
+    )
+
+
+def gold_impact(
+    postings, reference_run: str = REFERENCE_RUN, min_salary_jobs: int = MIN_SALARY_JOBS
+):
+    """Sai lệch so với mốc sạch cùng chế độ: trung bình / lớn nhất % lệch trung vị lương, % lệch số tin theo tỉnh."""
+    from pyspark.sql import functions as F
+
+    st = province_stats(postings)
+    ref = st.filter(F.col("run_id") == reference_run).select(
+        "mode", "location_code", F.col("jobs").alias("ref_jobs"),
+        F.col("salary_jobs").alias("ref_salary_jobs"), F.col("median_salary").alias("ref_median"),
+    )  # fmt: skip
+    j = st.join(ref, ["mode", "location_code"]).filter(
+        F.col("ref_salary_jobs") >= min_salary_jobs
+    )
+    ape_med = F.abs(F.col("median_salary") - F.col("ref_median")) / F.col("ref_median")
+    ape_jobs = F.abs(F.col("jobs") - F.col("ref_jobs")) / F.col("ref_jobs")
+    return (
+        j.groupBy("run_id", "mode")
+        .agg(
+            F.count("*").alias("provinces"),
+            F.round(F.avg(ape_med) * 100, 3).alias("median_salary_mape_pct"),
+            F.round(F.max(ape_med) * 100, 3).alias("median_salary_max_ape_pct"),
+            F.round(F.avg(ape_jobs) * 100, 3).alias("job_count_mape_pct"),
+        )
+        .orderBy("run_id", "mode")
+    )
+
+
+def clean_diffs(postings, messages, reference_run: str = REFERENCE_RUN):
+    """Trên lượt sạch: tin nào chế độ robust cho kết quả khác baseline, kèm chuỗi gốc – để người kiểm tra xem
+    là sửa đúng hay nhầm (dữ liệu sạch không có đáp án)."""
+    from pyspark.sql import functions as F
+
+    base = postings.filter(
+        (F.col("run_id") == reference_run) & (F.col("mode") == "baseline")
+    ).alias("b")
+    rob = postings.filter(
+        (F.col("run_id") == reference_run) & (F.col("mode") == "robust")
+    ).alias("r")
+    raw = messages.filter(F.col("run_id") == reference_run).select(
+        F.col("kafka_key").alias("source_job_id"),
+        F.get_json_object("value", "$.payload.locations").alias("raw_locations"),
+        F.get_json_object("value", "$.payload.salary_text").alias("raw_salary"),
+        F.get_json_object("value", "$.payload.experience_text").alias("raw_experience"),
+    )
+    j = base.join(rob, "source_job_id").join(raw, "source_job_id", "left")
+    checks = [
+        ("location", "location_codes", "raw_locations"),
+        ("salary", "salary_min_vnd", "raw_salary"),
+        ("salary", "salary_max_vnd", "raw_salary"),
+        ("experience", "experience_min_years", "raw_experience"),
+    ]
+    parts = [
+        j.filter(~F.col(f"b.{c}").eqNullSafe(F.col(f"r.{c}"))).select(
+            "source_job_id",
+            F.lit(name).alias("field"),
+            F.col(f"b.{c}").cast("string").alias("baseline_value"),
+            F.col(f"r.{c}").cast("string").alias("robust_value"),
+            F.col(raw_col).alias("raw_value"),
+        )
+        for name, c, raw_col in checks
+    ]
+    out = parts[0]
+    for p in parts[1:]:
+        out = out.unionByName(p)
+    return out.dropDuplicates(["source_job_id", "field"])
+
+
+def _table_md(rows, cols) -> str:
+    lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    lines += [
+        "| " + " | ".join("" if r[c] is None else str(r[c]) for c in cols) + " |"
+        for r in rows
+    ]
+    return "\n".join(lines)
+
+
+def evaluate(spark, args) -> None:
+    from pyspark.sql import functions as F
+
+    spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {NS}")
+    postings = spark.table(POSTINGS).persist()
+    truth = spark.table(TRUTH)
+    judged = judge(truth, postings, spark.table(QUARANTINE), args.reference)
+    m = metrics(judged).persist()
+    m.writeTo(METRICS).using("iceberg").createOrReplace()
+    gi = gold_impact(postings, args.reference)
+    gi.writeTo(GOLD_IMPACT).using("iceberg").createOrReplace()
+    cd = clean_diffs(postings, spark.table(MESSAGES), args.reference)
+    cd.writeTo(CLEAN_DIFFS).using("iceberg").createOrReplace()
+
+    # bảng tóm tắt theo loại nhiễu (gộp mọi lượt nhiễu) – in ra log để chép vào benchmarks/noise_robustness.md
+    by_type = (
+        m.groupBy("noise_type", "expected")
+        .pivot("mode", list(MODES))
+        .agg((F.sum("ok") / F.sum("total")).alias("r"), F.sum("total").alias("n"))
+        .orderBy("noise_type")
+        .collect()
+    )
+    rows = [
+        {
+            "loại nhiễu": r["noise_type"],
+            "mong đợi": r["expected"],
+            "số tin": r["robust_n"],
+            "baseline": f"{r['baseline_r'] * 100:.1f}%"
+            if r["baseline_r"] is not None
+            else "",
+            "robust": f"{r['robust_r'] * 100:.1f}%"
+            if r["robust_r"] is not None
+            else "",
+        }
+        for r in by_type
+    ]
+    log.info(
+        "Tỉ lệ xử lý đúng theo loại nhiễu (gộp các lượt):\n%s",
+        _table_md(rows, list(rows[0]) if rows else []),
+    )
+    overall = (
+        m.groupBy("run_id", "mode")
+        .agg(
+            F.sum("total").alias("tin_nhieu"),
+            F.round(F.sum("ok") / F.sum("total") * 100, 2).alias("dung_pct"),
+        )
+        .orderBy("run_id", "mode")
+        .collect()
+    )
+    log.info(
+        "Theo lượt:\n%s",
+        _table_md(overall, ["run_id", "mode", "tin_nhieu", "dung_pct"]),
+    )
+    gir = spark.table(GOLD_IMPACT).collect()
+    log.info("Lệch so với mốc sạch (tỉnh ≥ %s tin có lương):\n%s", MIN_SALARY_JOBS, _table_md(
+        gir, ["run_id", "mode", "provinces", "median_salary_mape_pct", "median_salary_max_ape_pct", "job_count_mape_pct"]
+    ))  # fmt: skip
+    diffs = spark.table(CLEAN_DIFFS).groupBy("field").count().orderBy("field").collect()
+    log.info(
+        "Dữ liệu sạch – số tin robust khác baseline: %s",
+        {r["field"]: r["count"] for r in diffs},
+    )
+    postings.unpersist()
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description="Thí nghiệm nhiễu trên namespace lab")
     sub = p.add_subparsers(dest="step", required=True)
@@ -278,6 +525,8 @@ def main(argv: list[str] | None = None) -> None:
         help="Danh sách run_id cách nhau dấu phẩy (mặc định: mọi lượt)",
     )
     pc.add_argument("--modes", default=",".join(MODES))
+    pe = sub.add_parser("evaluate", help="Phần 3: đo so với đáp án và mốc sạch")
+    pe.add_argument("--reference", default=REFERENCE_RUN)
     args = p.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -290,6 +539,8 @@ def main(argv: list[str] | None = None) -> None:
         inject(spark, args)
     elif args.step == "clean":
         clean(spark, args)
+    elif args.step == "evaluate":
+        evaluate(spark, args)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 |---|---|---|
 | 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm: 4 lượt 0/10/20/40% |
 | 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ✅ đã chạy trên cụm (4 lượt × 2 chế độ) |
-| 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ⬜ |
+| 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | 🧪 mã + kiểm thử xong; chờ chạy trên cụm |
 
 **Ranh giới (ADR 0001 joblens):** chỉ đụng các trường mà repo này chuẩn hóa (D2: lương, địa điểm, kinh nghiệm, tiêu đề)
 và lớp message (trùng y hệt, sai thứ tự, hỏng). Trùng gần giống giữa các trang là dedup của Web Mining (D5) – không làm.
@@ -210,5 +210,51 @@ Lý do cách ly: `r10_s42` 288 `invalid_json` + 304 `missing:crawl_ts`; `r20_s42
 
 ## Phần 3 – Đo
 
-⬜ Chưa làm. Dự kiến: precision/recall theo loại nhiễu, tỉ lệ khôi phục đúng giá trị sạch, sai số trung vị lương theo
-tỉnh ở mức nhiễu 0/10/20/40% khi có và không có phần 2 → `benchmarks/noise_robustness.md` và ô Grafana.
+**Vai trò.** Trả lời bằng số: pipeline xử lý đúng bao nhiêu phần trăm mỗi loại nhiễu, trước và sau phần 2, và nếu
+**không** xử lý thì nhiễu làm lệch số liệu người dùng thấy (trung vị lương, số tin theo tỉnh) bao nhiêu. Đây là kết quả
+đưa vào báo cáo (bài học nhóm 1 "chất lượng dữ liệu", nhóm 9 "kiểm thử") và lên Grafana.
+
+**Mã:** `noise_lab.py evaluate` – các hàm `judge`, `metrics`, `gold_impact`, `clean_diffs`; `tests/test_noise.py`
+thêm 4 kiểm thử chạy Spark.
+
+**Cách chấm.** Mỗi dòng đáp án được chấm ở **cả hai chế độ**. Mốc so sánh là kết quả của *cùng chế độ* trên lượt sạch
+`r0_s42` – để chỉ đo ảnh hưởng của nhiễu, không lẫn khác biệt giữa hai cách chuẩn hóa.
+
+| Hành vi mong đợi | Tính là đúng khi |
+|---|---|
+| `recover` | trường bị nhiễu (lương / mã tỉnh / tiêu đề; mojibake: cả ba) bằng đúng mốc sạch |
+| `flag` | lương (hoặc kinh nghiệm) là null – không vào thống kê |
+| `unknown` | lương là null (và mã tỉnh rỗng nếu mất cả địa điểm) – không đoán bừa |
+| `dedup`, `keep_latest` | tin có trong silver với tiêu đề + lương bằng mốc sạch (bản cũ không đè bản mới) |
+| `quarantine` | tin **không** có trong silver **và** có trong bảng cách ly |
+
+**Ba bảng kết quả**
+- `lab.noise_metrics` – theo lượt × chế độ × loại nhiễu: `total`, `ok`, `rate`.
+- `lab.gold_impact` – theo lượt × chế độ: số tỉnh (≥ 200 tin có lương ở mốc sạch), trung bình và lớn nhất % lệch trung vị
+  lương, trung bình % lệch số tin theo tỉnh.
+- `lab.clean_diffs` – trên lượt **sạch**, tin nào robust cho kết quả khác baseline, kèm chuỗi gốc. Dữ liệu sạch không
+  có đáp án, nên bảng này để **người** xem lại: các thay đổi đó là sửa đúng hay đoán nhầm (ví dụ 69 tin có thêm tỉnh).
+
+**Kiểm thử (Spark cục bộ, dữ liệu tổng hợp):** mỗi dòng đáp án được chấm đúng một lần mỗi chế độ; robust đạt 100% ở
+mojibake, HTML, khoảng trắng, lương năm, NFD trong khi baseline < 100%; message hỏng: robust 100%, baseline 0%; trùng và
+sai thứ tự đạt ở cả hai; số tin theo tỉnh lệch ít hơn khi có xử lý; dữ liệu sạch tổng hợp không có khác biệt.
+
+**Chạy trên cụm** (sau `inject` và `clean`):
+```bash
+EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab evaluate
+```
+✅ Log in 3 bảng markdown – `Tỉ lệ xử lý đúng theo loại nhiễu`, `Theo lượt`, `Lệch so với mốc sạch` – và dòng
+`Dữ liệu sạch – số tin robust khác baseline: {…}`; kết thúc `==> Xong`. Chép 3 bảng vào
+[`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md).
+
+**Grafana** – cập nhật dashboard: `bash deploy/monitoring/install.sh`, rồi tải lại trang. Cuối dashboard có mục
+*Thí nghiệm nhiễu*: biểu đồ tỉ lệ xử lý đúng theo loại nhiễu (baseline vs robust, lượt 20%) và bảng lệch số liệu theo
+tỉnh. Hai ô báo lỗi đỏ nếu chưa chạy `evaluate`.
+
+Xem mẫu thay đổi trên dữ liệu sạch:
+```sql
+SELECT field, count(*) FROM iceberg.lab.clean_diffs GROUP BY 1;
+SELECT * FROM iceberg.lab.clean_diffs WHERE field = 'location' LIMIT 30;
+```
+
+**Kết quả trên VietJobs:** [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md) – `<cần đo>`.
