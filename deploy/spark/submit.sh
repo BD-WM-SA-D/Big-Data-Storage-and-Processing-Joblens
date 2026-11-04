@@ -39,6 +39,16 @@ if [ "${EXECUTORS:-1}" = 0 ]; then
   echo "==> Local mode (EXECUTORS=0): Job ${NS}/${APP}"
   ARGS=""
   for a in "$@"; do ARGS+=", $(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$a")"; done
+  # Giới hạn RAM của pod theo DRIVER_MEMORY: heap JVM + ~1 GiB cho phần ngoài heap và tiến trình Python (UDF).
+  # Trước đây cố định 2 GiB nên DRIVER_MEMORY=2g/3g vẫn bị OOMKilled (heap đã chiếm gần hết giới hạn).
+  DRV="${DRIVER_MEMORY:-1g}"
+  case "$DRV" in
+    *[gG]) DRV_MI=$(( ${DRV%[gG]} * 1024 )) ;;
+    *[mM]) DRV_MI=${DRV%[mM]} ;;
+    *) echo "DRIVER_MEMORY phải dạng <số>g hoặc <số>m (ví dụ 2g, 768m)"; exit 1 ;;
+  esac
+  LIMIT_MI=$(( DRV_MI + 1024 ))
+  REQ_MI=$(( DRV_MI < 1024 ? DRV_MI : 1024 ))
   kubectl apply -f - >/dev/null <<EOF
 apiVersion: batch/v1
 kind: Job
@@ -78,8 +88,8 @@ spec:
             - secretRef: {name: joblens-s3}
             - secretRef: {name: joblens-mongo, optional: true}
           resources:
-            requests: {cpu: 250m, memory: 1Gi}
-            limits: {memory: 2Gi}
+            requests: {cpu: 250m, memory: ${REQ_MI}Mi}
+            limits: {memory: ${LIMIT_MI}Mi}
           volumeMounts:
             - {name: ckpt, mountPath: /checkpoints}
       volumes:

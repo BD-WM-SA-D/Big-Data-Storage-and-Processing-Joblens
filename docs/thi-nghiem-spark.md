@@ -140,4 +140,7 @@ EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh bench_joins --repeat 3 
 ✅ Bảng 4 dòng (`config`, `seconds_median`, … `broadcast_hash_join`, `sort_merge_join`, `shuffle_exchange`,
 `aqe_final`) và `Mọi cấu hình cho cùng kết quả: True`. Kế hoạch đầy đủ: `s3://joblens/reports/join-bench/`.
 
+Lần chạy đầu (2026-11-04) bị **OOMKilled** cả với `DRIVER_MEMORY=3g`: `submit.sh` đặt giới hạn RAM pod chế độ local
+cố định 2 GiB, nhỏ hơn cả heap JVM. Đã sửa: giới hạn = `DRIVER_MEMORY` + 1 GiB (heap + phần ngoài heap + Python).
+
 Kết quả: `<cần đo>` → [`../benchmarks/join_optimization.md`](../benchmarks/join_optimization.md).
