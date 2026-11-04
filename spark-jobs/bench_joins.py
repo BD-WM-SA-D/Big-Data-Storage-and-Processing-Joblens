@@ -11,10 +11,10 @@ thực thi CUỐI (sau khi chạy – với AQE là kế hoạch đã tối ưu 
 
 Cấu hình:
   smj_only      AQE tắt, tắt broadcast (autoBroadcastJoinThreshold = -1): mọi join là sort-merge – mốc so sánh
-  broadcast     AQE tắt, broadcast theo ngưỡng mặc định 10 MB. Lưu ý: bộ lập kế hoạch tĩnh chỉ broadcast khi ƯỚC
-                LƯỢNG kích thước bảng < ngưỡng; bảng tỉnh tạo từ Python (createDataFrame) không có thống kê nên
-                Spark ước lượng rất lớn và vẫn chọn sort-merge – AQE (đo kích thước thật lúc chạy) hoặc gợi ý
-                broadcast tường minh mới đổi được
+  broadcast     AQE tắt, broadcast theo ngưỡng mặc định 10 MB. Bộ lập kế hoạch tĩnh chỉ broadcast khi ƯỚC LƯỢNG
+                kích thước < ngưỡng: bảng Iceberg có thống kê file nên ước lượng được; bảng tạo từ Python
+                (createDataFrame) không có thống kê nên bị ước lượng rất lớn và vẫn sort-merge – AQE (đo kích thước
+                thật lúc chạy) hoặc gợi ý broadcast tường minh mới đổi được
   aqe           AQE bật (gộp partition nhỏ sau shuffle, đổi chiến lược join lúc chạy, tách partition lệch)
   aqe_reorder   AQE bật + viết lại truy vấn: gộp và lọc trước khi join, join bảng nhỏ trước, gợi ý broadcast
 

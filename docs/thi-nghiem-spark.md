@@ -13,7 +13,7 @@ Quy ước terminal như [`tap-duot-demo.md`](tap-duot-demo.md): **T1–T4** là
 | B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | ✅ xong |
 | C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | ✅ xong |
 | D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | ✅ xong – [`../benchmarks/batch_vs_streaming.md`](../benchmarks/batch_vs_streaming.md) Lần 2 |
-| E | Tối ưu nhiều join: AQE tắt/bật, broadcast, viết lại thứ tự join | Spark nhóm 3 "tối ưu nhiều join" | 🧪 mã + 3 kiểm thử xong |
+| E | Tối ưu nhiều join: AQE tắt/bật, broadcast, viết lại thứ tự join | Spark nhóm 3 "tối ưu nhiều join" | ✅ xong |
 
 Thứ tự nên chạy: A → B → C (B tạo file nhỏ cho C) → D → E.
 
@@ -129,9 +129,9 @@ cuối. Mã: `spark-jobs/bench_joins.py`; kiểm thử `tests/test_bench_joins.p
 | `aqe` | AQE bật |
 | `aqe_reorder` | AQE bật + viết lại truy vấn: gộp trước khi join, join bảng nhỏ trước, gợi ý broadcast |
 
-Phát hiện ngay từ kiểm thử: với AQE tắt, bảng tỉnh tạo bằng `createDataFrame` **không được broadcast** dù chỉ 34 dòng –
-bộ lập kế hoạch tĩnh không có thống kê nên ước lượng kích thước rất lớn. AQE đo kích thước thật lúc chạy và đổi sang
-broadcast hash join; gợi ý `broadcast()` tường minh cũng được.
+Phát hiện từ kiểm thử (bảng tạo bằng `createDataFrame`, không có thống kê): với AQE tắt, bộ lập kế hoạch tĩnh **không
+broadcast** được join nào dù bảng chỉ vài dòng – nó ước lượng kích thước rất lớn. Trên cụm, bảng Iceberg có thống kê
+kích thước file nên broadcast tĩnh đổi được 2/3 join; AQE đo kích thước thật lúc chạy và đổi được cả 3.
 
 ```bash
 # T1
@@ -143,4 +143,5 @@ EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh bench_joins --repeat 3 
 Lần chạy đầu (2026-11-04) bị **OOMKilled** cả với `DRIVER_MEMORY=3g`: `submit.sh` đặt giới hạn RAM pod chế độ local
 cố định 2 GiB, nhỏ hơn cả heap JVM. Đã sửa: giới hạn = `DRIVER_MEMORY` + 1 GiB (heap + phần ngoài heap + Python).
 
-Kết quả: `<cần đo>` → [`../benchmarks/join_optimization.md`](../benchmarks/join_optimization.md).
+Kết quả (2026-11-04, trung vị 3 lần): `smj_only` 2,61 s → `broadcast` 2,44 s → `aqe` 2,01 s → `aqe_reorder` 1,78 s
+(−32%), cùng kết quả ở cả 4 cấu hình – chi tiết và nhận xét: [`../benchmarks/join_optimization.md`](../benchmarks/join_optimization.md).

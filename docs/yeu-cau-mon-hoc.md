@@ -90,7 +90,7 @@ liệu, **thêm nhiễu vào dữ liệu rồi xử lý nhiễu** – kế hoạ
 | | *Biến đổi + xử lý nhiễu (yêu cầu thêm)* | ✅ | `normalize.clean_text`, lương năm, tỉnh gõ sai, ngoại lai; `bronze.ingest_errors` – [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md) |
 | 3. Join | Broadcast join (dữ liệu lệch) | ✅ | `analytics_spark.explode_locations` – tin ⋈ 34 tỉnh; Hà Nội/TP.HCM chiếm phần lớn |
 | | Sort-merge join | ✅ | `analytics_spark.activity_join` – silver ⋈ snapshot theo `job_uid` (hint MERGE) |
-| | Tối ưu nhiều join | 🧪 | `bench_joins.py`: 4 cấu hình (sort-merge, broadcast, AQE, AQE + viết lại thứ tự join) – **chờ chạy trên cụm** ([`thi-nghiem-spark.md`](thi-nghiem-spark.md) mục E) |
+| | Tối ưu nhiều join | ✅ | `bench_joins.py`: sort-merge 2,61 s → broadcast 2,44 s → AQE 2,01 s → AQE + viết lại thứ tự join 1,78 s, cùng kết quả ([`../benchmarks/join_optimization.md`](../benchmarks/join_optimization.md)) |
 | 4. Hiệu năng | Partition pruning | ✅ | bronze `days(ingest_ts), source`; cờ `bronze_filter_pushed` trong `plan_checks` |
 | | Bucketing | ✅ | silver `bucket(16, job_uid)` |
 | | Cache / persist | ✅ | `bronze_jobs.py` (persist mỗi micro-batch); `analytics_spark.py` |
