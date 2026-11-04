@@ -303,6 +303,24 @@ def test_osa_distance():
     assert N.osa_distance("hanoi", "danang", limit=1) == 2  # quá giới hạn → limit + 1
 
 
+def test_typo_match_only_keyboard_errors():
+    assert N.typo_match("hanooi", "hanoi")  # lặp
+    assert N.typo_match("hnoi", "hanoi")  # thiếu
+    assert N.typo_match("hnaoi", "hanoi")  # đảo
+    assert not N.typo_match("haichau", "laichau")  # thay ký tự
+    assert not N.typo_match("vangiang", "angiang")  # chèn ký tự lạ
+    assert not N.typo_match("hanoi", "hanoi")
+
+
+@pytest.mark.parametrize(
+    "place",
+    ["văn giang", "tp phủ lý", "phúc yên", "hải châu", "phổ yên", "long thành"],
+)
+def test_real_district_names_are_not_guessed_as_other_provinces(place):
+    # tên huyện/thị xã thật trên VietJobs sạch từng bị so khớp gần đúng nhầm sang tỉnh khác (lab.clean_diffs)
+    assert N.location_codes([place]) == []
+
+
 def test_location_typos_and_city_suffix():
     assert N.location_codes(["hà nộii"]) == ["01"]
     assert N.location_codes(["đà nẵngg"]) == ["48"]

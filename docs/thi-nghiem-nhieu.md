@@ -125,7 +125,7 @@ thí nghiệm) – nên dữ liệu thật cũng sạch hơn; thí nghiệm ch�
 | Lương năm → tháng (`/năm`, `mỗi năm`, `per year`…); đơn vị `tỷ` | `normalize.parse_salary` | `salary_yearly` |
 | Ngưỡng ngoại lai lương tháng: trên **300 triệu** → null (trước là 2 tỷ) | `normalize.SALARY_MAX_VALID`; kỳ vọng GX dùng cùng hằng số | `salary_outlier` |
 | Kinh nghiệm trên **40 năm** → null (khớp kỳ vọng GX ≤ 40) | `normalize.parse_experience` | `experience_outlier` |
-| So khớp tỉnh chịu lỗi gõ: khoảng cách chỉnh sửa (có hoán vị) ≤ 1 trên danh mục alias, chỉ khóa ≥ 5 ký tự và chỉ khi mọi ứng viên cùng một mã tỉnh; bỏ hậu tố `City`/`Province` | `normalize.fuzzy_location`, `osa_distance`, `place_key` | `location_typo`, một phần `location_abbrev` |
+| So khớp tỉnh chịu lỗi gõ: chỉ nhận **một lỗi bàn phím** – thiếu một ký tự, lặp một ký tự, đảo hai ký tự kề – trên danh mục alias, khóa ≥ 5 ký tự, và chỉ khi mọi tên khớp cùng một mã tỉnh; bỏ hậu tố `City`/`Province`. (Bản đầu dùng khoảng cách chỉnh sửa ≤ 1 bất kỳ – đã thu hẹp sau khi phần 3 phát hiện đoán nhầm trên dữ liệu sạch, xem "Phát hiện" ở phần 3) | `normalize.fuzzy_location`, `typo_match`, `place_key` | `location_typo`, một phần `location_abbrev` |
 | Cách ly message hỏng **kèm lý do** (`invalid_json`, `missing:<cột>`) thay cho đếm rồi bỏ | `bronze_jobs.to_bronze` + `errors()`; bảng mới `bronze.ingest_errors` (bảng nội bộ của repo, không cần contract) | `broken_json`, `missing_required` |
 | Bản trùng y hệt, bản cũ đến sau | **Đã có từ trước**: silver giữ bản `crawl_ts` mới nhất mỗi `job_uid` (`silver_job_postings.build_updates`) | `duplicate`, `out_of_order` |
 
@@ -248,13 +248,34 @@ EXECUTORS=0 DRIVER_MEMORY=2g bash deploy/spark/submit.sh noise_lab evaluate
 [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md).
 
 **Grafana** – cập nhật dashboard: `bash deploy/monitoring/install.sh`, rồi tải lại trang. Cuối dashboard có mục
-*Thí nghiệm nhiễu*: biểu đồ tỉ lệ xử lý đúng theo loại nhiễu (baseline vs robust, lượt 20%) và bảng lệch số liệu theo
-tỉnh. Hai ô báo lỗi đỏ nếu chưa chạy `evaluate`.
+*Thí nghiệm nhiễu* gồm 3 ô: bảng xử lý đúng theo loại nhiễu (lượt 20%, cột baseline/robust vẽ thanh màu 0–100%, sắp
+theo mức cải thiện – dễ đọc hơn biểu đồ cột vì nhiều loại có tỉ lệ thấp ở baseline); biểu đồ tỉ lệ đúng gộp theo mức
+nhiễu (10/20/40%); bảng lệch số liệu theo tỉnh. Các ô báo lỗi đỏ nếu chưa chạy `evaluate`.
 
 Xem mẫu thay đổi trên dữ liệu sạch:
 ```sql
 SELECT field, count(*) FROM iceberg.lab.clean_diffs GROUP BY 1;
 SELECT * FROM iceberg.lab.clean_diffs WHERE field = 'location' LIMIT 30;
 ```
+
+**Phát hiện từ `lab.clean_diffs` (lần đánh giá đầu, 2026-11-04) – đoán nhầm tỉnh trên dữ liệu SẠCH.** Trên lượt sạch,
+robust khác baseline ở 77 tin về địa điểm và 13 tin về lương. Xem 30 tin địa điểm đầu tiên: phần lớn là **so khớp gần
+đúng nhầm** tên huyện/thị xã thật sang một tỉnh khác chỉ khác một ký tự:
+
+| Chuỗi gốc | Đúng là | Bị đoán thành | Kiểu sai khác |
+|---|---|---|---|
+| `văn giang` | huyện của Hưng Yên | 91 An Giang | thừa một ký tự (`v`) |
+| `hải châu` | quận của Đà Nẵng | 12 Lai Châu | thay một ký tự |
+| `phúc yên`, `phổ yên` | Phú Thọ (Vĩnh Phúc cũ), Thái Nguyên | 66 Đắk Lắk (Phú Yên cũ) | thừa / thay một ký tự |
+| `tp phủ lý` | Ninh Bình (Hà Nam cũ) | 79 TP.HCM | thay một ký tự |
+| `long thành` | Đồng Nai | 75 Đồng Nai (đúng – nhưng nhờ may: gần `long khánh`) | thay một ký tự |
+| `ho chi minh city` | 79 | 79 | đúng – nhờ bỏ hậu tố `City` |
+
+Dữ liệu tổng hợp trong kiểm thử không có tên huyện nên không lộ ra lỗi này – đó là lý do phải có bảng `clean_diffs` và
+người xem lại. **Đã sửa:** chỉ nhận ba kiểu lỗi bàn phím (thiếu, lặp, đảo), không nhận thay ký tự hay chèn ký tự lạ;
+thêm kiểm thử hồi quy cho 6 chuỗi trên (`tests/test_normalize.py`). Đánh đổi cần ghi rõ trong báo cáo: lỗi gõ kiểu *thay*
+một ký tự sẽ không được sửa; và bộ tiêm nhiễu `location_typo` dùng đúng ba kiểu được nhận, nên tỉ lệ khôi phục đo
+được của loại này là **cận trên** – dữ liệu thật có cả lỗi thay ký tự. Sau khi sửa, chạy lại `clean` rồi `evaluate` và
+ghi số liệu mới (13 tin khác biệt về lương: `<cần đo>` – xem `SELECT * FROM iceberg.lab.clean_diffs WHERE field = 'salary'`).
 
 **Kết quả trên VietJobs:** [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md) – `<cần đo>`.

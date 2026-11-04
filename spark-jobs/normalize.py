@@ -134,22 +134,45 @@ def osa_distance(a: str, b: str, limit: int = 2) -> int:
     return prev[-1]
 
 
+def typo_match(key: str, target: str) -> bool:
+    """`key` là `target` gõ sai đúng MỘT lỗi bàn phím: thiếu một ký tự, lặp một ký tự, hoặc đảo hai ký tự kề nhau.
+
+    Cố ý KHÔNG nhận thay một ký tự hay chèn ký tự lạ: trên VietJobs sạch, hai kiểu đó biến tên huyện/thị xã thật thành
+    tên tỉnh khác ("hải châu" → Lai Châu, "văn giang" → An Giang, "phúc yên"/"phổ yên" → Phú Yên) – đo ở
+    docs/thi-nghiem-nhieu.md phần 3, bảng lab.clean_diffs.
+    """
+    if key == target:
+        return False
+    if len(key) == len(target):  # đảo hai ký tự kề
+        diff = [i for i in range(len(key)) if key[i] != target[i]]
+        return (
+            len(diff) == 2
+            and diff[1] == diff[0] + 1
+            and key[diff[0]] == target[diff[1]]
+            and key[diff[1]] == target[diff[0]]
+        )
+    if len(key) == len(target) - 1:  # thiếu một ký tự
+        return any(target[:i] + target[i + 1 :] == key for i in range(len(target)))
+    if len(key) == len(target) + 1:  # lặp một ký tự
+        return any(
+            key[i] == key[i - 1] and key[:i] + key[i + 1 :] == target
+            for i in range(1, len(key))
+        )
+    return False
+
+
 @lru_cache(maxsize=8192)
 def fuzzy_location(key: str, csv_path: str | None = None) -> str | None:
-    """Mã tỉnh cho khóa địa điểm gõ sai một ký tự (lặp, thiếu, thay, đảo). Chỉ khóa ≥ 5 ký tự, và chỉ khi mọi tên ở
-    khoảng cách nhỏ nhất cùng một mã tỉnh – không đoán khi mơ hồ."""
+    """Mã tỉnh cho khóa địa điểm gõ sai một lỗi (typo_match). Chỉ khóa ≥ 5 ký tự, và chỉ khi mọi tên khớp cùng một mã
+    tỉnh – không đoán khi mơ hồ."""
     if len(key) < 5:
         return None
-    best, codes = 2, set()
-    for k, code in location_index(csv_path).items():
-        if len(k) < 4:
-            continue
-        d = osa_distance(key, k, limit=1)
-        if d < best:
-            best, codes = d, {code}
-        elif d == best:
-            codes.add(code)
-    return codes.pop() if best <= 1 and len(codes) == 1 else None
+    codes = {
+        code
+        for k, code in location_index(csv_path).items()
+        if len(k) >= 5 and typo_match(key, k)
+    }
+    return codes.pop() if len(codes) == 1 else None
 
 
 def location_codes(

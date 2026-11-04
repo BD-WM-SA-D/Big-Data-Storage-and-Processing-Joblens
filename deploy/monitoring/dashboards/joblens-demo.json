@@ -828,9 +828,9 @@
     },
     {
       "id": 107,
-      "type": "barchart",
-      "title": "Tỉ lệ xử lý đúng theo loại nhiễu – lượt 20% (%)",
-      "description": "lab.noise_metrics: tin bị nhiễu được khôi phục đúng / gắn cờ / cách ly đúng như đáp án",
+      "type": "table",
+      "title": "Xử lý đúng theo loại nhiễu – lượt 20% (baseline = trước, robust = sau phần 2)",
+      "description": "lab.noise_metrics. Đúng = khôi phục đúng giá trị sạch, gắn cờ ngoại lai, cách ly message hỏng, hoặc chỉ giữ bản mới nhất – theo đáp án. Sắp theo mức cải thiện.",
       "datasource": {
         "type": "trino-datasource",
         "uid": "trino"
@@ -839,7 +839,7 @@
         "x": 0,
         "y": 58,
         "w": 14,
-        "h": 12
+        "h": 14
       },
       "targets": [
         {
@@ -848,7 +848,149 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT noise_type AS loai_nhieu,\n  round(max(CASE WHEN mode = 'baseline' THEN rate END) * 100, 1) AS baseline,\n  round(max(CASE WHEN mode = 'robust' THEN rate END) * 100, 1) AS robust\nFROM iceberg.lab.noise_metrics WHERE run_id = 'r20_s42'\nGROUP BY 1 ORDER BY 1",
+          "rawSQL": "SELECT noise_type AS loai_nhieu, expected AS mong_doi,\n  max(CASE WHEN mode = 'robust' THEN total END) AS so_tin,\n  round(max(CASE WHEN mode = 'baseline' THEN rate END) * 100, 1) AS baseline,\n  round(max(CASE WHEN mode = 'robust' THEN rate END) * 100, 1) AS robust,\n  round((max(CASE WHEN mode = 'robust' THEN rate END) - max(CASE WHEN mode = 'baseline' THEN rate END)) * 100, 1) AS cai_thien_diem\nFROM iceberg.lab.noise_metrics WHERE run_id = 'r20_s42'\nGROUP BY 1, 2 ORDER BY cai_thien_diem DESC, loai_nhieu",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "baseline"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "robust"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-RdYlGr"
+                }
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "cai_thien_diem"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    },
+    {
+      "id": 109,
+      "type": "barchart",
+      "title": "Tỉ lệ xử lý đúng theo mức nhiễu (%)",
+      "description": "lab.noise_metrics gộp mọi loại nhiễu của từng lượt",
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      },
+      "gridPos": {
+        "x": 14,
+        "y": 58,
+        "w": 10,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT replace(run_id, '_s42', '') AS muc_nhieu,\n  round(sum(CASE WHEN mode = 'baseline' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'baseline' THEN total END), 1) AS baseline,\n  round(sum(CASE WHEN mode = 'robust' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'robust' THEN total END), 1) AS robust\nFROM iceberg.lab.noise_metrics GROUP BY 1 ORDER BY 1",
           "format": 1
         }
       ],
@@ -864,8 +1006,8 @@
         "overrides": []
       },
       "options": {
-        "orientation": "horizontal",
-        "showValue": "auto",
+        "orientation": "auto",
+        "showValue": "always",
         "legend": {
           "showLegend": true,
           "displayMode": "list",
@@ -883,17 +1025,17 @@
     {
       "id": 108,
       "type": "table",
-      "title": "Nhiễu làm lệch số liệu theo tỉnh (so với mốc sạch, %)",
-      "description": "lab.gold_impact: trung bình / lớn nhất % lệch trung vị lương và % lệch số tin theo tỉnh (tỉnh ≥ 200 tin có lương)",
+      "title": "Nhiễu làm lệch số liệu theo tỉnh so với dữ liệu sạch (%)",
+      "description": "lab.gold_impact: % lệch trung vị lương (trung bình, lớn nhất) và số tin theo tỉnh, tỉnh ≥ 200 tin có lương",
       "datasource": {
         "type": "trino-datasource",
         "uid": "trino"
       },
       "gridPos": {
         "x": 14,
-        "y": 58,
+        "y": 65,
         "w": 10,
-        "h": 12
+        "h": 7
       },
       "targets": [
         {
@@ -902,12 +1044,15 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT run_id AS luot, mode AS che_do, provinces AS so_tinh,\n  median_salary_mape_pct AS lech_trung_vi_tb, median_salary_max_ape_pct AS lech_trung_vi_max,\n  job_count_mape_pct AS lech_so_tin_tb\nFROM iceberg.lab.gold_impact ORDER BY run_id, mode",
+          "rawSQL": "SELECT replace(run_id, '_s42', '') AS muc_nhieu, mode AS che_do,\n  median_salary_mape_pct AS lech_trung_vi_tb, median_salary_max_ape_pct AS lech_trung_vi_max,\n  job_count_mape_pct AS lech_so_tin_tb\nFROM iceberg.lab.gold_impact WHERE run_id <> 'r0_s42' ORDER BY run_id, mode",
           "format": 1
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2
+        },
         "overrides": []
       },
       "options": {
