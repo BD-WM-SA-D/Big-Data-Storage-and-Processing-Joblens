@@ -343,6 +343,15 @@ def test_salary_yearly_billion_and_outlier():
     )
 
 
+def test_salary_range_with_one_outlier_end_is_dropped_whole():
+    # gặp trên VietJobs sạch (lab.clean_diffs): giữ nửa còn lại sẽ tạo khoảng lương không có trong tin gốc
+    assert N.parse_salary("50.0 - 500.0 triệu")[:2] == (None, None)
+    assert N.parse_salary("50.0 - 500.0 triệu", robust=False)[:2] == (
+        50_000_000,
+        500_000_000,
+    )
+
+
 def test_experience_cap():
     assert N.parse_experience("99 năm") == (None, None)
     assert N.parse_experience("99 năm", robust=False) == (99.0, 99.0)

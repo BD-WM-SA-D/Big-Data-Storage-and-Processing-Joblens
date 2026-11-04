@@ -838,8 +838,8 @@
       "gridPos": {
         "x": 0,
         "y": 58,
-        "w": 14,
-        "h": 14
+        "w": 24,
+        "h": 13
       },
       "targets": [
         {
@@ -889,7 +889,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 180
+                "value": 260
               }
             ]
           },
@@ -927,7 +927,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 180
+                "value": 260
               }
             ]
           },
@@ -978,10 +978,10 @@
         "uid": "trino"
       },
       "gridPos": {
-        "x": 14,
-        "y": 58,
+        "x": 0,
+        "y": 71,
         "w": 10,
-        "h": 7
+        "h": 9
       },
       "targets": [
         {
@@ -990,7 +990,7 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT replace(run_id, '_s42', '') AS muc_nhieu,\n  round(sum(CASE WHEN mode = 'baseline' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'baseline' THEN total END), 1) AS baseline,\n  round(sum(CASE WHEN mode = 'robust' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'robust' THEN total END), 1) AS robust\nFROM iceberg.lab.noise_metrics GROUP BY 1 ORDER BY 1",
+          "rawSQL": "SELECT replace(run_id, '_s42', '') AS muc_nhieu,\n  CAST(round(sum(CASE WHEN mode = 'baseline' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'baseline' THEN total END), 1) AS double) AS baseline,\n  CAST(round(sum(CASE WHEN mode = 'robust' THEN ok END) * 100.0 / sum(CASE WHEN mode = 'robust' THEN total END), 1) AS double) AS robust\nFROM iceberg.lab.noise_metrics GROUP BY 1 ORDER BY 1",
           "format": 1
         }
       ],
@@ -1032,10 +1032,10 @@
         "uid": "trino"
       },
       "gridPos": {
-        "x": 14,
-        "y": 65,
-        "w": 10,
-        "h": 7
+        "x": 10,
+        "y": 71,
+        "w": 14,
+        "h": 9
       },
       "targets": [
         {

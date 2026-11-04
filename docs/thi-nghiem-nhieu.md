@@ -275,7 +275,15 @@ Dữ liệu tổng hợp trong kiểm thử không có tên huyện nên không 
 người xem lại. **Đã sửa:** chỉ nhận ba kiểu lỗi bàn phím (thiếu, lặp, đảo), không nhận thay ký tự hay chèn ký tự lạ;
 thêm kiểm thử hồi quy cho 6 chuỗi trên (`tests/test_normalize.py`). Đánh đổi cần ghi rõ trong báo cáo: lỗi gõ kiểu *thay*
 một ký tự sẽ không được sửa; và bộ tiêm nhiễu `location_typo` dùng đúng ba kiểu được nhận, nên tỉ lệ khôi phục đo
-được của loại này là **cận trên** – dữ liệu thật có cả lỗi thay ký tự. Sau khi sửa, chạy lại `clean` rồi `evaluate` và
-ghi số liệu mới (13 tin khác biệt về lương: `<cần đo>` – xem `SELECT * FROM iceberg.lab.clean_diffs WHERE field = 'salary'`).
+được của loại này là **cận trên** – dữ liệu thật có cả lỗi thay ký tự.
+
+**Sau khi sửa (đánh giá lại 2026-11-04):** trên dữ liệu sạch, robust còn khác baseline ở **7 tin địa điểm** – cả 7 đều
+**sửa đúng** (`ho chi minh city`, `ho chi minh city, district 7/10`, `sala urban area, thu duc city` → 79 TP.HCM; trước
+đây không nhận ra tỉnh nào) – và **13 tin lương**: `200.0 - 500.0 triệu` (11 tin), `50.0 - 500.0 triệu` (1), `500.0 triệu`
+(1). Đây là chuỗi lương có thật trong VietJobs, vượt ngưỡng ngoại lai 300 triệu/tháng. Không có đáp án cho dữ liệu thật
+nên đây là **quyết định**, cần người kiểm tra xác nhận (`<người kiểm tra>`): coi là ngoại lai/khả nghi, không đưa vào thống
+kê lương (13 trên 34.338 tin có lương, 0,04%). Lần đánh giá này cũng lộ một lỗi nhỏ: khi chỉ **một đầu** vượt ngưỡng,
+bản đầu giữ lại nửa còn lại (`50 - 500 triệu` → chỉ còn 50 triệu) – tạo ra khoảng lương không có trong tin gốc. Đã sửa:
+một đầu vượt ngưỡng thì bỏ cả khoảng (kiểm thử `test_salary_range_with_one_outlier_end_is_dropped_whole`).
 
 **Kết quả trên VietJobs:** [`../benchmarks/noise_robustness.md`](../benchmarks/noise_robustness.md) – `<cần đo>`.

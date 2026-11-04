@@ -288,6 +288,10 @@ def parse_salary(
             int(round(v)) if v is not None and SALARY_MIN_VALID <= v <= upper else None
         )
 
+    if robust and any(v is not None and v > upper for v in (lo, hi)):
+        # một đầu vượt ngưỡng ngoại lai → bỏ cả khoảng: giữ nửa còn lại ("50 - 500 triệu" → chỉ còn 50 triệu)
+        # sẽ thành một khoảng lương không có trong tin gốc
+        return None, None, False, currency
     lo, hi = ok(lo), ok(hi)
     return lo, hi, False, currency
 
