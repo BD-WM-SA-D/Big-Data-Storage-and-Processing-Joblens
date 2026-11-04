@@ -6,7 +6,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 
 | Phần | Vai trò | Trạng thái |
 |---|---|---|
-| 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm (lượt 20%, 40%); lượt 0%, 10% chạy lại |
+| 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm: 4 lượt 0/10/20/40% |
 | 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ⬜ |
 | 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ⬜ |
 
@@ -98,8 +98,8 @@ SELECT seq, kafka_key, substr(value, 1, 200) AS dau_message FROM iceberg.lab.noi
 
 | Lượt | Tỉ lệ đặt | Message gốc | Tin nhiễu | Tỉ lệ thực |
 |---|---|---|---|---|
-| `r0_s42` | 0 | `<cần đo>` | `<cần đo>` | – |
-| `r10_s42` | 0,1 | `<cần đo>` | `<cần đo>` | – |
+| `r0_s42` | 0 | 48.092 | 0 | 0% (mốc sạch) |
+| `r10_s42` | 0,1 | 48.092 | 4.830 | 10,04% |
 | `r20_s42` | 0,2 | 48.092 | 9.614 | 19,99% |
 | `r40_s42` | 0,4 | 48.092 | 19.325 | 40,18% |
 
