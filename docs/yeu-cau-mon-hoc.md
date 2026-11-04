@@ -70,7 +70,7 @@ liệu, **thêm nhiễu vào dữ liệu rồi xử lý nhiễu** – kế hoạ
 | Yêu cầu | Trạng thái | Ở đâu | Demo ([`chay-demo.md`](chay-demo.md)) |
 |---|---|---|---|
 | Hệ thống hoàn chỉnh, bài toán thực tế | ✅ | Tin tuyển dụng VN (VietJobs 48.092 tin) → lương / cấp bậc / tỉnh – [`kien-truc.md`](kien-truc.md) mục 1 | phần 1 |
-| Kiến trúc Lambda **hoặc** Kappa | ✅ dựng xong · 🧪 ADR "Đề xuất" | Kappa cho đường nạp + batch theo lịch cho silver/gold – [`adr/0001-lambda-vs-kappa.md`](adr/0001-lambda-vs-kappa.md), [`../benchmarks/batch_vs_streaming.md`](../benchmarks/batch_vs_streaming.md) | phần 1, 4 |
+| Kiến trúc Lambda **hoặc** Kappa | ✅ dựng xong · ✅ đủ số đo, ADR chờ nhóm duyệt | Kappa cho đường nạp + batch theo lịch cho silver/gold – [`adr/0001-lambda-vs-kappa.md`](adr/0001-lambda-vs-kappa.md), [`../benchmarks/batch_vs_streaming.md`](../benchmarks/batch_vs_streaming.md) | phần 1, 4 |
 | Pipeline thu thập → xử lý → lưu trữ → trực quan hóa | ✅ | Kafka → Spark → Iceberg/MongoDB → Trino → Grafana | toàn bộ |
 | Spark | ✅ | `spark-jobs/` (Spark 4.1.3, PySpark) | phần 2–6 |
 | Lưu trữ phân tán (HDFS hoặc tương đương) | ✅ | SeaweedFS (S3 API) + Apache Iceberg – `deploy/storage/`. Lý do không dùng HDFS: [`kien-truc.md`](kien-truc.md), hỏi đáp ở [`chay-demo.md`](chay-demo.md) mục 7 | phần 2 |

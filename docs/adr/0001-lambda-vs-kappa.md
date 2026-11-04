@@ -1,6 +1,6 @@
 # ADR 0001 – Lambda hay Kappa cho đường nạp dữ liệu tin tuyển dụng
 
-- **Trạng thái:** Đề xuất – chờ số đo (`benchmarks/batch_vs_streaming.md`)
+- **Trạng thái:** Đề xuất – đủ số đo cho cả 3 điều kiện (lần 2, 2026-11-04), chờ nhóm duyệt (`<người kiểm tra>`)
 - **Ngày:** 2026-10-22
 - **Người viết:** `<tên>` · **Người kiểm tra:** `<người kiểm tra>`
 - **Liên quan:** `joblens/docs/project-plan/03` (mục "Batch vs streaming", "Metrics nền tảng"),
@@ -35,10 +35,10 @@ Hai kiến trúc kinh điển:
 |---|---|---|---|
 | Đường nạp bronze | batch + streaming song song, ghép ở serving | chỉ streaming; lịch sử nạp bằng replay vào Kafka | streaming là đường chính; batch chỉ để nạp lịch sử/khôi phục, ghi cùng một bảng |
 | Silver/gold | hai bản (batch + speed) | streaming liên tục | batch mỗi giờ, MERGE idempotent |
-| Độ tươi bronze (p95) | batch: ≤ chu kỳ + 122 s (lần 1) | 60,6 s (lần 1) | 60,6 s (lần 1) |
+| Độ tươi bronze (p95) | batch: ≤ chu kỳ + 24–29 s (lần 2; lần 1: 122 s) | 18,4 s (trigger 10 s) / 61,4 s (trigger 1 phút) – lần 2 | như B |
 | Độ tươi gold | speed layer: giây–phút | giây–phút | ≤ chu kỳ DAG + thời gian chạy (`<số đo>`) |
-| Chi phí thường trực | cao nhất (hai hệ) | job streaming chạy liên tục cho mọi tầng | một job streaming nhỏ (~1.377 MiB khi không tải, lần 1) + job batch theo giờ |
-| Số file nhỏ | nhiều | nhiều nhất | 2 file / 5.000 tin ở bronze (lần 1, trigger 10 s), gộp bằng `iceberg_maintenance` |
+| Chi phí thường trực | cao nhất (hai hệ) | job streaming chạy liên tục cho mọi tầng | một job streaming nhỏ (~1,5–1,6 GB khi không tải, lần 2) + job batch theo giờ |
+| Số file nhỏ | nhiều | nhiều nhất | 5 file / 5.000 tin (trigger 10 s) hoặc 2 file (trigger 1 phút) – lần 2; `iceberg_maintenance` gộp 13 → 8 file |
 | Độ phức tạp vận hành | cao: hai mã, ghép kết quả | trung bình: mọi biến đổi là streaming, khó với MERGE/GX/dbt | thấp–trung bình: một mã nạp, dbt/GX chạy batch quen thuộc |
 | Tái xử lý | chạy lại batch | replay Kafka (giới hạn bởi retention) | replay Kafka hoặc `--full` trên bronze + time travel |
 
@@ -47,8 +47,9 @@ Hai kiến trúc kinh điển:
 Chọn **C – Kappa cho đường nạp, batch theo lịch cho silver/gold**, với điều kiện số đo trong
 `benchmarks/batch_vs_streaming.md` cho thấy:
 
-1. đường B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (docs/project-plan/03) ở tải chuẩn – lần 1: p95 = 60,6 s ở 100 tin/giây ✔;
-2. hai đường cho cùng tập khóa (`độ đúng` = 0) – lần 1: 0 ✔;
+1. đường B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (docs/project-plan/03) ở tải chuẩn – lần 1: p95 = 60,6 s; lần 2: 18,4 s
+   (trigger 10 s), 61,4 s (trigger 1 phút), ở 100 tin/giây ✔;
+2. hai đường cho cùng tập khóa (`độ đúng` = 0) – lần 1 và cả hai lượt lần 2: 0 ✔;
 3. số file nhỏ của B được `iceberg_maintenance` gộp lại trong một chu kỳ DAG – 13 → 8 file, kích thước TB 2.609 → 4.226 KB, số dòng 76.199 không đổi (2026-11-04, toàn bảng bronze sau lượt streaming trigger 10 s) ✔. Không gộp được về ít hơn vì
    `rewrite_data_files` chỉ gộp file **trong cùng phân vùng** `days(ingest_ts), source` (cần ≥ 2 file mỗi phân vùng).
 

@@ -12,7 +12,7 @@ Quy ước terminal như [`tap-duot-demo.md`](tap-duot-demo.md): **T1–T4** là
 | A | Tìm tin bị chấm sai trong thí nghiệm nhiễu (`lab.noise_errors`) | `<cần kiểm tra>` ở `benchmarks/noise_robustness.md` | ✅ xong |
 | B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | ✅ xong |
 | C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | ✅ xong |
-| D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | 🧪 lệnh sẵn |
+| D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | ✅ xong – [`../benchmarks/batch_vs_streaming.md`](../benchmarks/batch_vs_streaming.md) Lần 2 |
 | E | Tối ưu nhiều join: AQE tắt/bật, broadcast, viết lại thứ tự join | Spark nhóm 3 "tối ưu nhiều join" | 🧪 mã + 3 kiểm thử xong |
 
 Thứ tự nên chạy: A → B → C (B tạo file nhỏ cho C) → D → E.

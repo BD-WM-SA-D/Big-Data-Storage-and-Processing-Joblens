@@ -52,10 +52,48 @@ bash scripts/benchmark-batch-vs-streaming.sh 5000 100 "10 seconds"
     Cần một lần đo đầy đủ không dùng `REUSE_A`.
   - B giữ ~1,4 GB RAM thường trực kể cả khi không có dữ liệu – chi phí cố định của đường streaming.
 
+### Lần 2 – 2026-11-04 (giờ VN), hai trigger
+
+- Commit: `27c2f3a` · Profile: `full` · Máy: `<CPU>`, 16 GB RAM, WSL `memory=12GB` · Spark: cluster mode, 1 executor
+  (pod `…-driver` + `…-exec-1`) · Không dùng `REUSE_A`: mỗi lượt chạy đủ cả A và B, có số đo chi phí cả hai đường.
+- Tham số: N=5000, RATE=100 tin/giây; lượt (a) TRIGGER=10 seconds (kết thúc 14:43:14Z), lượt (b) TRIGGER=1 minute
+  (kết thúc 14:52:13Z). Log và mẫu đo: `/tmp/joblens-bench-URVV`, `/tmp/joblens-bench-F2gM` trên máy chạy.
+
+**(a) TRIGGER = 10 seconds**
+
+| Đường | Dòng | ID khác nhau | File mới | Trễ p50 (s) | Trễ p95 (s) | Trễ max (s) | Thông lượng (dòng/s) | CPU-giây | GB-giờ | RAM đỉnh (MiB) | Thời gian job (s) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A – batch | 5000 | 5000 | 1 | 29.0 | 29.0 | 29.0 | 172.4 | 18 | 0.0031 | 768 | 130 |
+| B – streaming | 5000 | 5000 | 5 | 9.8 | 18.4 | 20.5 | 93.4 | 37 | 0.0427 | 1597 | – |
+
+- Độ đúng: 0. Streaming khi không tải: RAM đỉnh 1600 MiB, 0.0259 GB-giờ trong 60 giây.
+
+**(b) TRIGGER = 1 minute**
+
+| Đường | Dòng | ID khác nhau | File mới | Trễ p50 (s) | Trễ p95 (s) | Trễ max (s) | Thông lượng (dòng/s) | CPU-giây | GB-giờ | RAM đỉnh (MiB) | Thời gian job (s) |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| A – batch | 5000 | 5000 | 1 | 24.0 | 24.0 | 24.0 | 208.3 | 9 | 0.0019 | 697 | 124 |
+| B – streaming | 5000 | 5000 | 2 | 39.0 | 61.4 | 63.5 | 57.8 | 23 | 0.0489 | 1488 | – |
+
+- Độ đúng: 0. Streaming khi không tải: RAM đỉnh 1525 MiB, 0.0245 GB-giờ trong 60 giây.
+
+**Nhận xét**
+- Cả hai lượt: hai đường cho cùng tập khóa (độ đúng 0); B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (p95 18,4 s và 61,4 s).
+- **Đánh đổi trigger:** 10 s → 1 phút: số file của 5.000 tin 5 → 2 (−60%), CPU-giây 37 → 23, nhưng trễ p95 18,4 → 61,4 s.
+  Trigger ngắn cho độ tươi tốt hơn và trả giá bằng file nhỏ hơn, nhiều hơn – việc `iceberg_maintenance` gộp lại
+  (13 → 8 file trên toàn bảng, `docs/thi-nghiem-spark.md` mục C).
+- **A nhanh hơn số đo lần 1 nhiều** (29 / 24 s so với 122 s): lần này image đã có sẵn trên node nên job chỉ còn đọc CSV và
+  ghi. Trễ 29 s của A chỉ là thời gian xử lý một lượt; chạy theo lịch mỗi giờ thì độ trễ thực tế cộng thêm thời gian
+  chờ tới lượt (trung bình ~30 phút, tối đa ~60 phút) – nên A không phải đối thủ của B về độ tươi.
+- **B nhanh hơn lần 1** (p95 18,4 s so với 60,6 s ở cùng trigger 10 s): chưa xác định nguyên nhân – có thể do lần 1 cụm
+  chạy nhiều thành phần hơn cùng lúc. Nên chạy thêm một lượt (a) để xem số nào ổn định (`<cần đo>`).
+- **Chi phí:** ở trigger 10 s, B tốn ~2× CPU-giây và ~14× GB-giờ của A cho cùng 5.000 tin, và giữ ~1,5–1,6 GB RAM
+  thường trực kể cả khi không có dữ liệu – chi phí cố định của đường streaming.
+
 ## Gợi ý các lần đo tiếp
 
 | Lần | Thay đổi | Câu hỏi |
 |---|---|---|
-| 2 | TRIGGER = "1 minute" | Trigger dài hơn → ít file hơn bao nhiêu, trễ tăng bao nhiêu? |
+| 2 | TRIGGER = "1 minute" | Trigger dài hơn → ít file hơn bao nhiêu, trễ tăng bao nhiêu? – **đã đo (Lần 2b)** |
 | 3 | RATE = 500 | Streaming có theo kịp không (trễ p95 có tăng dần)? |
 | 4 | Sau `iceberg_maintenance` | Số file của B giảm còn bao nhiêu? – **đã đo 2026-11-04 (toàn bảng bronze): 13 → 8 file, 2.609 → 4.226 KB/file, số dòng không đổi** ([`../docs/thi-nghiem-spark.md`](../docs/thi-nghiem-spark.md) mục C) |
