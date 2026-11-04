@@ -181,8 +181,17 @@ def log_progress(progress: dict) -> None:
 
 
 def new_progress(recent: list[dict], last: int | None) -> list[dict]:
-    """Các bản tiến độ có batchId > last (recentProgress giữ vài batch gần nhất; một vòng chờ có thể qua nhiều batch)."""
-    return [p for p in recent if last is None or p.get("batchId", -1) > last]
+    """Các bản tiến độ có batchId > last, mỗi batchId một bản (recentProgress giữ vài batch gần nhất; một vòng chờ có
+    thể qua nhiều batch). Spark còn báo tiến độ cho các lần trigger rỗng với batchId cũ và 0 dòng – giữ bản có nhiều
+    dòng vào nhất, nếu không log sẽ in trùng batch và che mất số dòng thật."""
+    best: dict[int, dict] = {}
+    for p in recent:
+        b = p.get("batchId", -1)
+        if last is not None and b <= last:
+            continue
+        if b not in best or p.get("numInputRows", 0) > best[b].get("numInputRows", 0):
+            best[b] = p
+    return [best[b] for b in sorted(best)]
 
 
 def main(argv: list[str] | None = None) -> None:

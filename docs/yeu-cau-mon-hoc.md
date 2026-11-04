@@ -96,7 +96,7 @@ liệu, **thêm nhiễu vào dữ liệu rồi xử lý nhiễu** – kế hoạ
 | | Cache / persist | ✅ | `bronze_jobs.py` (persist mỗi micro-batch); `analytics_spark.py` |
 | | Kế hoạch thực thi | ✅ | `analytics_spark.plan_text` → `s3://joblens/reports/spark-plans/`; cột `plan_checks` trên Grafana |
 | 5. Streaming | Structured Streaming | ✅ | `bronze_jobs.py`, `stream_province_windows.py` |
-| | Nhiều output mode | 🧪 | `stream_province_windows.py --output-mode update\|append` – đã chạy `update`; `append`: [`thi-nghiem-spark.md`](thi-nghiem-spark.md) mục B |
+| | Nhiều output mode | ✅ | `stream_province_windows.py --output-mode update\|append` – cả hai đã chạy trên cụm; `append` ghi mỗi cửa sổ đúng một lần khi đóng ([`thi-nghiem-spark.md`](thi-nghiem-spark.md) mục B) |
 | | Watermark, dữ liệu trễ | ✅ | watermark 10 phút, replay `--late-every 10`: lượt 24/10 có batch bỏ 8, 4, 7 dòng (`deploy/compat.md`); lượt tập dượt 25/10 bỏ 10 dòng (chưa ghi `compat.md`) |
 | | Quản lý state | ✅ | aggregation theo cửa sổ; `numRowsTotal` 30–57 dòng |
 | | Exactly-once | ✅ | checkpoint offset Kafka + commit Iceberg; upsert idempotent theo `_id` (MongoDB) |

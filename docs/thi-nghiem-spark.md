@@ -10,7 +10,7 @@ Quy ước terminal như [`tap-duot-demo.md`](tap-duot-demo.md): **T1–T4** là
 | # | Lượt | Đóng yêu cầu | Trạng thái |
 |---|---|---|---|
 | A | Tìm tin bị chấm sai trong thí nghiệm nhiễu (`lab.noise_errors`) | `<cần kiểm tra>` ở `benchmarks/noise_robustness.md` | ✅ xong |
-| B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | 🧪 lệnh sẵn |
+| B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | ✅ xong |
 | C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | 🧪 lệnh sẵn |
 | D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | 🧪 lệnh sẵn |
 | E | Tối ưu nhiều join: AQE tắt/bật, broadcast, viết lại thứ tự join | Spark nhóm 3 "tối ưu nhiều join" | 🧪 mã + 3 kiểm thử xong |
@@ -62,7 +62,21 @@ kubectl logs -n compute "$POD" | grep -E "bắt đầu|tiến độ batch|cửa 
 **không có** dòng `batch N: … cửa sổ×tỉnh` (cửa sổ chưa đóng nên append chưa ghi gì). Sau lượt replay thứ hai mới có
 `batch N: X cửa sổ×tỉnh (mới X, cập nhật 0)` – mỗi cửa sổ được ghi đúng một lần, không có "cập nhật".
 
-Kết quả: `<cần đo>` (số cửa sổ ghi ra, thời điểm so với lúc gửi tin).
+Kết quả (2026-11-04, cửa sổ 1 phút, watermark 2 phút, replay 1.000 tin lúc ~14:14:36 UTC rồi 100 tin lúc 14:21:37):
+
+| Batch | Watermark | State (cửa sổ×tỉnh đang giữ) | Ghi vào MongoDB |
+|---|---|---|---|
+| 2–5 (lượt replay 1) | 14:12:36 → 14:13:06 | 28 → 54 | **không** – chưa cửa sổ nào đóng |
+| 6–7 (không có tin mới) | 14:13:16 | 54 | không |
+| 8 (sau lượt replay 2) | **14:19:37** | 54 → **21** | **54 cửa sổ×tỉnh (mới 54, cập nhật 0)** |
+
+So với `update` (lượt 24–25/10: mỗi micro-batch ghi lại các cửa sổ vừa đổi, nhiều dòng "cập nhật"): `append` giữ kết
+quả trong state cho tới khi watermark vượt qua cuối cửa sổ, rồi ghi **đúng một lần** – 54 cửa sổ của lượt 1 được ghi
+cùng lúc ở batch 8, không có lần cập nhật nào; state giảm từ 54 xuống 21 (chỉ còn các cửa sổ của lượt 2, chưa đóng).
+Đánh đổi: kết quả cuối không đổi nữa, nhưng trễ ít nhất "độ dài cửa sổ + watermark" và chỉ ghi khi có tin mới đẩy
+watermark lên. Ghi chú: log tiến độ của lượt này in trùng batch có 0 dòng (Spark báo cả các lần trigger rỗng với
+batchId cũ) nên không đối chiếu được tổng số dòng vào với 1.000 tin – đã sửa (`new_progress` giữ một bản mỗi batchId,
+bản có nhiều dòng nhất) cho các lượt sau.
 
 ## C. Số file bronze trước/sau bảo trì
 

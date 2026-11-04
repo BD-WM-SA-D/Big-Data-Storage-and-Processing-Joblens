@@ -170,3 +170,14 @@ def test_new_progress_returns_every_unlogged_batch():
     assert [p["batchId"] for p in S.new_progress(recent, 4)] == [5, 6, 7]
     assert len(S.new_progress(recent, None)) == 7
     assert S.new_progress(recent, 7) == []
+
+
+def test_new_progress_keeps_one_entry_per_batch_with_most_rows():
+    recent = [
+        {"batchId": 8, "numInputRows": 100},
+        {"batchId": 8, "numInputRows": 0},  # trigger rỗng sau đó, cùng batchId
+        {"batchId": 9, "numInputRows": 0},
+        {"batchId": 9, "numInputRows": 0},
+    ]
+    out = S.new_progress(recent, 7)
+    assert [(p["batchId"], p["numInputRows"]) for p in out] == [(8, 100), (9, 0)]
