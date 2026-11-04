@@ -107,7 +107,7 @@ nguyên văn giữa các báo cáo).
 - **Vấn đề:** mỗi micro-batch sinh ít nhất một file Parquet mỗi phân vùng; truy vấn phải mở nhiều file.
 - **Giải pháp:** task `iceberg_maintenance` (`rewrite_data_files` binpack 128 MB, `rewrite_manifests`, `expire_snapshots`
   giữ 10 bản) chạy trong DAG; Grafana theo dõi số file và kích thước trung bình. Không chạy `remove_orphan_files` khi
-  streaming đang ghi (có thể xóa file chưa commit). Số file trước/sau: `<cần đo>`.
+  streaming đang ghi (có thể xóa file chưa commit). Số file trước/sau: 13 → 8 file, kích thước TB 2.609 → 4.226 KB, số dòng 76.199 không đổi (2026-11-04, toàn bảng bronze sau lượt streaming trigger 10 s); chỉ gộp được trong từng phân vùng.
 - **Điều rút ra:** lakehouse cần bảo trì định kỳ như cơ sở dữ liệu; compaction an toàn với ghi đồng thời nhờ snapshot.
 
 ### 4.2. Kiểu dữ liệu thời gian khác nhau giữa các tầng (2026-10-23)

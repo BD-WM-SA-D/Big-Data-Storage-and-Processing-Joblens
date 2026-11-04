@@ -49,7 +49,8 @@ Chọn **C – Kappa cho đường nạp, batch theo lịch cho silver/gold**, v
 
 1. đường B đạt chỉ tiêu độ tươi bronze ≤ 2 phút (docs/project-plan/03) ở tải chuẩn – lần 1: p95 = 60,6 s ở 100 tin/giây ✔;
 2. hai đường cho cùng tập khóa (`độ đúng` = 0) – lần 1: 0 ✔;
-3. số file nhỏ của B được `iceberg_maintenance` gộp lại trong một chu kỳ DAG – `<trước → sau>` (chưa đo).
+3. số file nhỏ của B được `iceberg_maintenance` gộp lại trong một chu kỳ DAG – 13 → 8 file, kích thước TB 2.609 → 4.226 KB, số dòng 76.199 không đổi (2026-11-04, toàn bảng bronze sau lượt streaming trigger 10 s) ✔. Không gộp được về ít hơn vì
+   `rewrite_data_files` chỉ gộp file **trong cùng phân vùng** `days(ingest_ts), source` (cần ≥ 2 file mỗi phân vùng).
 
 Lý do (định tính, chờ số đo xác nhận): một mã nạp duy nhất cho cả dữ liệu sống và dữ liệu lịch sử (tinh thần
 Kappa); silver/gold cần `MERGE INTO`, kiểm thử dbt và cổng GX – dễ làm đúng và kiểm tra ở chế độ batch; báo cáo

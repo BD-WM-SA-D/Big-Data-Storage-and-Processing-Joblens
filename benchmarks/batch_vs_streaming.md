@@ -58,4 +58,4 @@ bash scripts/benchmark-batch-vs-streaming.sh 5000 100 "10 seconds"
 |---|---|---|
 | 2 | TRIGGER = "1 minute" | Trigger dài hơn → ít file hơn bao nhiêu, trễ tăng bao nhiêu? |
 | 3 | RATE = 500 | Streaming có theo kịp không (trễ p95 có tăng dần)? |
-| 4 | Sau `iceberg_maintenance` | Số file của B giảm còn bao nhiêu (chi phí compaction của streaming)? |
+| 4 | Sau `iceberg_maintenance` | Số file của B giảm còn bao nhiêu? – **đã đo 2026-11-04 (toàn bảng bronze): 13 → 8 file, 2.609 → 4.226 KB/file, số dòng không đổi** ([`../docs/thi-nghiem-spark.md`](../docs/thi-nghiem-spark.md) mục C) |

@@ -11,7 +11,7 @@ Quy ước terminal như [`tap-duot-demo.md`](tap-duot-demo.md): **T1–T4** là
 |---|---|---|---|
 | A | Tìm tin bị chấm sai trong thí nghiệm nhiễu (`lab.noise_errors`) | `<cần kiểm tra>` ở `benchmarks/noise_robustness.md` | ✅ xong |
 | B | Streaming `--output-mode append` | Spark nhóm 5 "nhiều output mode" | ✅ xong |
-| C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | 🧪 lệnh sẵn |
+| C | Số file bronze trước/sau `iceberg_maintenance` | ADR 0001 điều kiện 3; bài học 4.1 | ✅ xong |
 | D | Batch vs streaming lần 2 (không dùng lại phần batch, thêm trigger 1 phút) | ADR 0001 | 🧪 lệnh sẵn |
 | E | Tối ưu nhiều join: AQE tắt/bật, broadcast, viết lại thứ tự join | Spark nhóm 3 "tối ưu nhiều join" | 🧪 mã + 3 kiểm thử xong |
 
@@ -94,8 +94,14 @@ bash scripts/trino.sh "SELECT count(*) AS so_file, round(avg(file_size_in_bytes)
 
 | | Số file | KB trung bình | Số dòng |
 |---|---|---|---|
-| Trước | `<cần đo>` | `<cần đo>` | `<cần đo>` |
-| Sau | `<cần đo>` | `<cần đo>` | `<cần đo>` |
+| Trước | 13 | 2.609 | 76.199 |
+| Sau | 8 | 4.226 | 76.199 |
+
+(2026-11-04, sau lượt streaming B; `maintenance_iceberg --tables bronze.jobs_raw`, ~18 giây.) Số dòng không đổi – gộp file
+không làm mất hay nhân đôi dữ liệu. Còn 8 file vì `rewrite_data_files` chỉ gộp file trong **cùng một phân vùng**
+(`days(ingest_ts), source`) và cần ≥ 2 file mỗi phân vùng (`min-input-files 2`) – kỳ vọng còn khoảng một file mỗi phân
+vùng; kiểm tra: `SELECT count(DISTINCT partition) FROM iceberg.bronze."jobs_raw$files"` (`<cần đo>`). Lượt streaming này
+ngắn nên chỉ sinh vài file nhỏ; lần đo batch vs streaming (mục D) sẽ cho số file sinh ra theo trigger 10 s và 1 phút.
 
 ## D. Batch vs streaming lần 2
 
