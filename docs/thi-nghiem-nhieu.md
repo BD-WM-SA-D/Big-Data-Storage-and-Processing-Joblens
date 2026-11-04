@@ -6,7 +6,7 @@ nhiễu*. Thí nghiệm có 3 phần; mỗi phần ghi vai trò, trạng thái, 
 
 | Phần | Vai trò | Trạng thái |
 |---|---|---|
-| 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | 🧪 mã + 17 kiểm thử xong; chờ chạy trên cụm |
+| 1. Tiêm nhiễu | Tạo dữ liệu "bẩn" **có kiểm soát** kèm **đáp án** – biết chính xác tin nào bị nhiễu gì, giá trị sạch là gì | ✅ đã chạy trên cụm (lượt 20%, 40%); lượt 0%, 10% chạy lại |
 | 2. Xử lý nhiễu | Làm pipeline chuẩn hóa silver bền hơn: sửa được nhiễu sửa được, gắn cờ giá trị vô lý, cách ly message hỏng kèm lý do | ⬜ |
 | 3. Đo | So kết quả pipeline với đáp án: phát hiện/khôi phục bao nhiêu theo từng loại nhiễu, nhiễu làm lệch số liệu gold bao nhiêu | ⬜ |
 
@@ -94,7 +94,22 @@ SELECT noise_type, expected, count(*) AS so_tin FROM iceberg.lab.noise_truth WHE
 SELECT seq, kafka_key, substr(value, 1, 200) AS dau_message FROM iceberg.lab.noisy_messages WHERE run_id = 'r20_s42' ORDER BY seq LIMIT 20;
 ```
 
-**Số liệu trên VietJobs:** lượt `r20_s42`: `<cần đo>` message, `<cần đo>` tin nhiễu, phân bố theo loại `<cần đo>`.
+**Số liệu trên VietJobs (chạy 2026-11-04, seed 42, đủ 48.092 tin):**
+
+| Lượt | Tỉ lệ đặt | Message gốc | Tin nhiễu | Tỉ lệ thực |
+|---|---|---|---|---|
+| `r0_s42` | 0 | `<cần đo>` | `<cần đo>` | – |
+| `r10_s42` | 0,1 | `<cần đo>` | `<cần đo>` | – |
+| `r20_s42` | 0,2 | 48.092 | 9.614 | 19,99% |
+| `r40_s42` | 0,4 | 48.092 | 19.325 | 40,18% |
+
+Phân bố lượt `r20_s42` theo loại (tổng 9.614): `missing_fields` 642, `html_entities` 620, `location_typo` 613,
+`broken_json` 613, `unicode_nfd` 599, `encoding_mojibake` 597, `missing_required` 592, `out_of_order` 591,
+`whitespace` 587, `experience_outlier` 587, `location_no_accent` 582, `salary_placeholder` 558, `duplicate` 557,
+`location_abbrev` 419, `salary_outlier` 380, `salary_yearly` 374, `salary_format` 369, `salary_swap` 334.
+
+Các loại nhiễu lương và `location_abbrev` ít hơn vì chỉ áp dụng được cho tin có khoảng lương / có đúng một tỉnh nằm
+trong danh mục viết tắt; 4 loại nhiễu message áp dụng được cho mọi tin nên đều ~600.
 
 ## Phần 2 – Xử lý nhiễu
 
