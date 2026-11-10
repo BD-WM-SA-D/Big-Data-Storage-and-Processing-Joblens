@@ -6,9 +6,10 @@ Anh IT4043E; bản tiếng Việt <https://datalab.vn/teaching/it4931-luu-tru-va
 2026-10-23. Trang **không** ghi thang điểm, hạn nộp, yêu cầu buổi demo hay thông báo mới – hỏi lại giảng viên.
 
 Dùng tài liệu này để: (1) biết chính xác giảng viên yêu cầu gì, (2) biết mỗi yêu cầu được chứng minh ở file nào và
-bước demo nào, (3) biết việc còn lại (mục 7). Phần phối hợp với repo Web Mining: [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md).
+bước demo nào, (3) biết việc còn lại (mục 7). Kế hoạch mở rộng theo góp ý của giảng viên tháng 11 (biến đổi dữ liệu,
+sáng tạo, production): [`ke-hoach-mo-rong.md`](ke-hoach-mo-rong.md). Phần phối hợp với repo Web Mining: [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md).
 
-Trạng thái (cập nhật 2026-11-03): ✅ có và đã chạy trên cụm · 🧪 có mã + kiểm thử, chưa chạy đủ trên cụm hoặc chưa đo ·
+Trạng thái (cập nhật 2026-11-10): ✅ có và đã chạy trên cụm · 🧪 có mã + kiểm thử, chưa chạy đủ trên cụm hoặc chưa đo ·
 ⬜ chưa có
 
 ---
@@ -155,10 +156,10 @@ của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)).
 | # | Việc | Phục vụ | Trạng thái |
 |---|---|---|---|
 | 1 | Thí nghiệm nhiễu (mục 6, [`thi-nghiem-nhieu.md`](thi-nghiem-nhieu.md)): tiêm nhiễu → xử lý → đo | Yêu cầu thêm; Spark nhóm 2; bài học nhóm 1, 9 | ✅ cả 3 phần đã chạy trên cụm (robust xử lý đúng ~98% tin nhiễu, baseline ~42%) |
-| 2 | Thí nghiệm batch vs streaming lần 2 (không `REUSE_A`, thêm trigger 1 phút) | ADR Kappa | ⬜ |
-| 3 | Đo số file bronze trước/sau `iceberg_maintenance` | ADR Kappa (điều kiện 3), bài học 4.1 | ⬜ |
-| 4 | Chạy `stream_province_windows --output-mode append`, ghi `deploy/compat.md` | Spark nhóm 5 | ⬜ |
-| 5 | Đo tối ưu nhiều join: AQE bật/tắt, thứ tự join, so kế hoạch + thời gian | Spark nhóm 3 | ⬜ |
+| 2 | Thí nghiệm batch vs streaming lần 2 (không `REUSE_A`, thêm trigger 1 phút) | ADR Kappa | ✅ [`../benchmarks/batch_vs_streaming.md`](../benchmarks/batch_vs_streaming.md) Lần 2 |
+| 3 | Đo số file bronze trước/sau `iceberg_maintenance` | ADR Kappa (điều kiện 3), bài học 4.1 | ✅ 13 → 8 file, số dòng không đổi |
+| 4 | Chạy `stream_province_windows --output-mode append`, ghi `deploy/compat.md` | Spark nhóm 5 | ✅ |
+| 5 | Đo tối ưu nhiều join: AQE bật/tắt, thứ tự join, so kế hoạch + thời gian | Spark nhóm 3 | ✅ [`../benchmarks/join_optimization.md`](../benchmarks/join_optimization.md) (−32%) |
 | 6 | Hỏi giảng viên: có bắt buộc GraphFrames không; nếu có, làm đồ thị trên dữ liệu của BD (mục 6 của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)) | Spark nhóm 6 | ⬜ |
 | 7 | Chuyển ADR 0001 (Lambda/Kappa) sang "Đã chấp nhận" sau việc 2, 3 | Báo cáo phần 2 | 🧪 |
 | 8 | Điền 5 chỗ `<cần đo>` + viết các bài học bổ sung ở mục 5 | Báo cáo phần 4 | 🧪 |
@@ -167,3 +168,8 @@ của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)).
 | 11 | Slide + video dự phòng cho buổi thuyết trình (tuần 13–15) | Thuyết trình | ⬜ |
 | 12 | Hỏi giảng viên: lịch thuyết trình của nhóm, hạn nộp báo cáo, thang điểm | – | ⬜ |
 | 13 | README: điền thành viên, MSSV, vai trò, ngày giảng viên đồng ý | Bài nộp | ⬜ |
+| 14 | **Biến đổi dữ liệu T1** – lịch sử tin SCD loại 2 (`silver.job_postings_history`, `MERGE INTO` / `dbt snapshot`) – [`ke-hoach-mo-rong.md`](ke-hoach-mo-rong.md) mục 2 | Góp ý giảng viên 2026-11 (biến đổi dữ liệu) | ⬜ |
+| 15 | **T2** – gold tăng dần (dbt `incremental`) + mart mới, đo dựng lại toàn bộ vs tăng dần | Góp ý giảng viên; L04, L09 | ⬜ |
+| 16 | **T6** – sort order / partition evolution trên silver, đo byte/file Trino quét | Góp ý giảng viên; L03 | ⬜ |
+| 17 | T4 phiên + phễu trên `events.user.v1`; T3 replay Kappa vào nhánh Iceberg (sau khi kiểm tra retention); T5 tỷ giá theo ngày | Góp ý giảng viên; L08, L09 | ⬜ |
+| 18 | Production: Kafka 3 broker + demo hỏng broker (P1), job cảnh báo việc làm (P2), MongoDB replica set (P3), SLO p99,9 (P4), Prometheus + cảnh báo, GitHub Actions | Góp ý giảng viên (production); L06, L08 | ⬜ |
