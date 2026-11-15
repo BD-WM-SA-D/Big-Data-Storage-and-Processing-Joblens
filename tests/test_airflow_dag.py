@@ -80,6 +80,7 @@ def test_dag_jobs_exist_in_spark_image():
     jobs = re.findall(r'spark_task\(\s*"[a-z_]+",\s*"([a-z_]+)"', src)
     assert set(jobs) == {
         "silver_job_postings",
+        "silver_job_history",
         "gx_silver",
         "analytics_spark",
         "maintenance_iceberg",
@@ -106,6 +107,9 @@ def test_dag_parses_with_airflow():
     assert bag.import_errors == {}
     dag = bag.dags["joblens_pipeline"]
     assert dag.task_dict["silver_job_postings"].downstream_task_ids == {
+        "silver_job_history"
+    }
+    assert dag.task_dict["silver_job_history"].downstream_task_ids == {
         "gx_validate_silver"
     }
     assert dag.task_dict["gx_validate_silver"].downstream_task_ids == {

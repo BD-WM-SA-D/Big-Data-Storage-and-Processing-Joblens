@@ -29,3 +29,38 @@ models:
               arguments:
                 to: ref('dim_location')
                 field: location_code
+
+  - name: mart_hiring_weekly
+    description: Tin mới theo tuần × nguồn × tỉnh × cấp bậc (incremental) – contract joblens gold.mart_hiring_weekly 0.1.0
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [week, source, location_code, level_code]
+    columns:
+      - name: week
+        data_tests: [not_null]
+      - name: new_job_count
+        data_tests: [not_null]
+      - name: updated_through
+        data_tests: [not_null]
+      - name: location_code
+        data_tests:
+          - relationships_or_all:
+              arguments:
+                to: ref('dim_location')
+                field: location_code
+
+  - name: mart_job_changes_weekly
+    description: Thay đổi của tin theo tuần × nguồn × nhóm trường (incremental) – contract joblens gold.mart_job_changes_weekly 0.1.0
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [week, source, changed_field]
+    columns:
+      - name: changed_field
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [title, company, salary, location, level, experience, employment_type, deadline]
+      - name: change_count
+        data_tests: [not_null]

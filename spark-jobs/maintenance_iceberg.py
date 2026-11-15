@@ -26,6 +26,7 @@ DEFAULT_TABLES = [
     "bronze.jobs_raw",
     "silver.job_postings",
     "silver.job_postings_snapshot",
+    "silver.job_postings_history",
 ]
 TARGET_FILE_BYTES = 128 * 1024 * 1024
 

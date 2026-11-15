@@ -2,16 +2,19 @@
 ### joblens_pipeline – điều phối tầng batch của nền tảng JobLens (IT4931)
 
 ```
-silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold        (Trino: seed + gold + kiểm thử dữ liệu)
-                                            └──> spark_analytics ──> iceberg_maintenance
-                                                 (Spark → MongoDB)    (compaction + dọn snapshot)
+silver_job_postings ──> silver_job_history ──> gx_validate_silver ──┬──> dbt_build_gold   (Trino: seed + gold + test)
+                                                                   └──> spark_analytics ──> iceberg_maintenance
+                                                                        (Spark → MongoDB)    (compaction + dọn snapshot)
 ```
 
 - **silver_job_postings** – Spark đọc phần bronze mới (mốc `joblens.bronze_watermark`), chuẩn hóa, `MERGE INTO`
   `silver.job_postings` và ghi ảnh chụp ngày vào `silver.job_postings_snapshot`.
+- **silver_job_history** – Spark tính lại lịch sử phiên bản (SCD loại 2) của các tin có bản crawl mới, từ mọi lần
+  crawl trong bronze, rồi một lệnh `MERGE INTO` vào `silver.job_postings_history` (chỉ ghi dòng thay đổi).
 - **gx_validate_silver** – Great Expectations kiểm tra silver (khóa, danh mục, khoảng lương, mã tỉnh, độ phủ);
   có kỳ vọng hỏng thì task đỏ và hai task sau không chạy – gold giữ bản cũ, không bị ghi đè bằng dữ liệu sai.
-- **dbt_build_gold** – `dbt build` trên Trino: `gold.dim_location`, `gold.mart_salary_role_region` và test dữ liệu;
+- **dbt_build_gold** – `dbt build` trên Trino: `gold.dim_location`, `gold.mart_salary_role_region`, hai mart tăng dần
+  `gold.mart_hiring_weekly`, `gold.mart_job_changes_weekly` (chỉ tính lại tuần có thay đổi) và test dữ liệu;
   test lỗi thì task đỏ, dữ liệu gold sai không được coi là xong.
 - **spark_analytics** – phân tích bằng Spark (pivot, hàm tổng hợp tùy biến, broadcast/sort-merge join, window,
   thống kê, MLlib) → MongoDB `analytics_*`; kế hoạch thực thi lưu ở `s3://joblens/reports/spark-plans/`.
@@ -99,6 +102,8 @@ with DAG(
 ) as dag:
     silver = spark_task("silver_job_postings", "silver_job_postings")
 
+    history = spark_task("silver_job_history", "silver_job_history")
+
     gold = KubernetesPodOperator(
         task_id="dbt_build_gold",
         name="joblens-dbt-build",
@@ -123,5 +128,5 @@ with DAG(
     maintenance = spark_task("iceberg_maintenance", "maintenance_iceberg")
 
     # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt nhẹ, chạy song song với bảo trì)
-    silver >> quality >> [gold, analytics]
+    silver >> history >> quality >> [gold, analytics]
     analytics >> maintenance

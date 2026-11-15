@@ -18,7 +18,10 @@ joblens-contracts = { git = "https://github.com/BD-WM-SA-D/joblens" }
 
 [dependency-groups]
 dev = [
+    # duckdb + sqlglot: kiểm thử logic model dbt tăng dần không cần Trino (tests/test_dbt_incremental.py)
+    "duckdb>=2.0.0",
     "pre-commit>=4.7.0",
     "pytest>=9.1.1",
     "ruff>=0.17.1",
+    "sqlglot>=30.23.0",
 ]

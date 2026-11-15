@@ -7,6 +7,10 @@
 #   bash scripts/demo-data.sh nosql    # MongoDB: insert/find/update/delete/aggregate, rồi Trino đọc + join Iceberg
 #   bash scripts/demo-data.sh kafka ["Tiêu đề"] ["15 - 25 triệu"] ["Hà Nội"]
 #                                      # thêm MỘT tin mới đi hết pipeline: Kafka → bronze → silver (chuẩn hóa)
+#                                      #   → silver.job_postings_history (phiên bản 1)
+#   bash scripts/demo-data.sh update demo-20261115093000 "25 - 35 triệu" ["Tiêu đề"] ["Hà Nội"]
+#                                      # nhà tuyển dụng SỬA tin đó (gửi lại cùng source_job_id) → silver ghi đè,
+#                                      #   history thêm phiên bản 2 và đóng phiên bản 1 (SCD loại 2)
 #   bash scripts/demo-data.sh clean    # xóa mọi thứ các lệnh trên tạo ra
 #
 # Chỉ ghi vào chỗ của repo này: namespace Iceberg `sandbox`, collection MongoDB `sandbox_jobs`, topic
@@ -110,7 +114,7 @@ nosql_demo() {
 kafka_demo() {
   local ttl="${1:-Kỹ sư dữ liệu Big Data (tin demo)}" sal="${2:-20 - 30 triệu}" loc="${3:-Hà Nội}"
   local id msg uid
-  id="demo-$(date +%Y%m%d%H%M%S)"
+  id="${DEMO_ID:-demo-$(date +%Y%m%d%H%M%S)}"
   msg=$(python3 - "$id" "$ttl" "$sal" "$loc" <<'PY'
 import hashlib, json, sys
 from datetime import datetime, timezone
@@ -155,7 +159,14 @@ PY
   DRIVER_MEMORY=1g EXECUTORS=0 bash deploy/spark/submit.sh silver_job_postings
   q "SELECT job_uid, title, salary_text, salary_min_vnd, salary_max_vnd, location_codes, experience_min_years, level_code
      FROM iceberg.silver.job_postings WHERE job_uid = '$uid'"
-  echo "Gold (dbt) cố ý bỏ tin synthetic nên tin demo chỉ thấy ở bronze/silver; ô 'Tin trong silver' trên Grafana tăng 1."
+  echo "Gold mart_salary_role_region cố ý bỏ tin synthetic; ô 'Tin trong silver' trên Grafana tăng 1."
+  pause
+
+  title "4. bronze → silver.job_postings_history (SCD loại 2: mỗi lần nội dung đổi là một phiên bản)"
+  DRIVER_MEMORY=1g EXECUTORS=0 bash deploy/spark/submit.sh silver_job_history
+  q "SELECT version_no, valid_from, valid_to, is_current, change_type, changed_fields, salary_min_vnd, salary_max_vnd, title
+     FROM iceberg.silver.job_postings_history WHERE job_uid = '$uid' ORDER BY version_no"
+  echo "Sửa tin này: bash scripts/demo-data.sh update $id \"25 - 35 triệu\"  (giữ nguyên tiêu đề/địa điểm nếu chỉ muốn đổi lương)"
 }
 
 clean() {
@@ -166,7 +177,9 @@ clean() {
   q "DROP SCHEMA IF EXISTS iceberg.sandbox"
   m 'db.sandbox_jobs.drop()'
   m 'db.getCollection("_schema").deleteOne({table: "sandbox_jobs"})'
-  # tin "demo-…" của lệnh kafka: xóa từng dòng (row-level delete của Iceberg) ở snapshot, silver, bronze
+  # tin "demo-…" của lệnh kafka: xóa từng dòng (row-level delete của Iceberg) ở history, snapshot, silver, bronze
+  q "DELETE FROM iceberg.silver.job_postings_history WHERE job_uid IN
+     (SELECT job_uid FROM iceberg.silver.job_postings WHERE source = 'synthetic' AND source_job_id LIKE 'demo-%')" || true  # bảng có thể chưa tạo
   q "DELETE FROM iceberg.silver.job_postings_snapshot WHERE job_uid IN
      (SELECT job_uid FROM iceberg.silver.job_postings WHERE source = 'synthetic' AND source_job_id LIKE 'demo-%')"
   q "DELETE FROM iceberg.silver.job_postings WHERE source = 'synthetic' AND source_job_id LIKE 'demo-%'"
@@ -177,6 +190,9 @@ case "${1:-}" in
   sql) sql_demo ;;
   nosql) nosql_demo ;;
   kafka) shift; kafka_demo "$@" ;;
+  update)
+    [ -n "${2:-}" ] || { echo "Cần source_job_id của tin demo, ví dụ: update demo-20261115093000 \"25 - 35 triệu\""; exit 1; }
+    DEMO_ID="$2" kafka_demo "${4:-}" "${3:-25 - 35 triệu}" "${5:-}" ;;
   clean) clean ;;
   *) sed -n '3,14p' "$0"; exit 1 ;;
 esac

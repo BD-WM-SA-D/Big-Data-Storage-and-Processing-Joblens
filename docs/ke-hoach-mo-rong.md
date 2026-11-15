@@ -31,6 +31,9 @@ Tài liệu chỉ ghi số trang và ý chính, **không** chép nội dung slid
 | T6 | **Bố cục vật lý**: sort order / Z-order theo tỉnh × ngày, partition evolution trên silver | L03 tr. 29 (min/max của Parquet cho phép bỏ qua row group) | Số file / byte Trino quét cho cùng truy vấn trước và sau |
 | T7 | **Mart dùng dữ liệu Web Mining** (khi `silver.job_skills` có): nhu cầu kỹ năng theo tháng × tỉnh. Repo này chỉ **đọc** bảng đó | – | Mart gold + câu truy vấn demo |
 
+**Tiến độ (2026-11-15):** T1, T2, T6 đã có mã, kiểm thử và hướng dẫn chạy – [`bien-doi-du-lieu.md`](bien-doi-du-lieu.md);
+chờ chạy trên cụm để điền số đo.
+
 **Chốt:** làm **T1 → T2 → T6** trước (cùng một câu chuyện: thô → sạch → lịch sử → mart tăng dần → bố cục tối ưu; đều
 là batch, nhẹ RAM, nằm trọn trong repo này). Còn thời gian thì thêm **T4**. T3 làm sau khi kiểm tra retention.
 

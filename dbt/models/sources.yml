@@ -4,7 +4,7 @@ sources:
   - name: silver
     database: iceberg
     schema: silver
-    description: Bảng silver do spark-jobs/silver_job_postings.py ghi (contract joblens).
+    description: Bảng silver do spark-jobs/silver_job_postings.py, silver_job_history.py ghi (contract joblens).
     tables:
       - name: job_postings
         description: Tin đã chuẩn hóa – joblens/schemas/tables/silver/job_postings.yaml 0.2.0
@@ -23,3 +23,26 @@ sources:
               - accepted_values:
                   arguments:
                     values: [full_time, part_time, contract, internship, other]
+
+      - name: job_postings_history
+        description: >
+          Lịch sử phiên bản tin (SCD loại 2) – joblens/schemas/tables/silver/job_postings_history.yaml 0.1.0.
+          Kiểm tra các bất biến SCD2 trước khi gold đọc.
+        data_tests:
+          - unique_combination:
+              arguments:
+                columns: [job_uid, version_no]
+          - one_current_per_key:
+              arguments:
+                key: job_uid
+          - valid_intervals:
+              arguments:
+                key: job_uid
+        columns:
+          - name: job_uid
+            data_tests: [not_null]
+          - name: change_type
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [new, changed]

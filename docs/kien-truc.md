@@ -27,7 +27,9 @@ flowchart LR
   subgraph LH[lakehouse – SeaweedFS S3 + Lakekeeper Iceberg REST]
     B[(bronze.jobs_raw<br/>append-only)]
     S[(silver.job_postings<br/>+ job_postings_snapshot)]
+    H[(silver.job_postings_history<br/>SCD loại 2)]
     G[(gold.mart_salary_role_region<br/>gold.dim_location)]
+    GI[(gold.mart_hiring_weekly<br/>gold.mart_job_changes_weekly<br/>tăng dần)]
   end
   subgraph NS[serving]
     M[(MongoDB 8.0<br/>province_windows, analytics_*)]
@@ -41,15 +43,18 @@ flowchart LR
   K -- "Spark Structured Streaming<br/>bronze_jobs" --> B
   K -- "Spark streaming có state<br/>stream_province_windows" --> M
   B -- "Spark MERGE INTO + chuẩn hóa<br/>silver_job_postings" --> S
+  B -- "tính lại lịch sử tin bị ảnh hưởng<br/>silver_job_history (MERGE I/U/D)" --> H
+  SIM[recrawl_sim<br/>crawl lại mô phỏng] -. "synthetic" .-> B
   S -- "GX 15 kỳ vọng (cổng)" --> S
   S -- "dbt-trino" --> G
+  S & H -- "dbt incremental<br/>delete+insert theo tuần" --> GI
   S -- "Spark analytics + MLlib<br/>analytics_spark" --> M
-  B & S & G --> T
+  B & S & H & G & GI --> T
   M --> T
   T --> GF
 ```
 
-Điều phối: Airflow 3.3.2, DAG `joblens_pipeline` (mỗi giờ) – `silver_job_postings` → `gx_validate_silver` →
+Điều phối: Airflow 3.3.2, DAG `joblens_pipeline` (mỗi giờ) – `silver_job_postings` → `silver_job_history` → `gx_validate_silver` →
 {`dbt_build_gold`, `spark_analytics` → `iceberg_maintenance`}. Task GX hỏng thì gold không được xây lại. Mỗi task là
 một pod trong namespace `compute` (KubernetesPodOperator); các job Spark chạy `spark-submit` lên Kubernetes.
 
@@ -99,13 +104,19 @@ Schema message `job_posting.v1` và contract các bảng nằm ở repo `joblens
 | Bronze | `iceberg.bronze.ingest_errors` | một message bị loại khi nạp, kèm lý do (`invalid_json`, `missing:<cột>`) | `days(ingest_ts)` | `bronze_jobs.py` |
 | Silver | `iceberg.silver.job_postings` | một tin (`job_uid = sha1(source:source_job_id)`), bản crawl mới nhất, đã chuẩn hóa lương VND/tháng, mã tỉnh (34 tỉnh sau 2025), kinh nghiệm, cấp bậc, loại hình | `months(first_seen_ts), bucket(16, job_uid)`; merge-on-read | `silver_job_postings.py` (MERGE INTO) |
 | Silver | `iceberg.silver.job_postings_snapshot` | trạng thái một tin trong một ngày | `days(snapshot_date)` | `silver_job_postings.py` |
+| Silver | `iceberg.silver.job_postings_history` | một **phiên bản** nội dung của một tin (SCD loại 2): `valid_from`/`valid_to`, `is_current`, `changed_fields` | `bucket(8, job_uid)` (+ `months(valid_from)` sau partition evolution); khóa `job_uid, version_no` | `silver_job_history.py` (MERGE INTO I/U/D) |
 | Gold | `iceberg.gold.mart_salary_role_region` | tháng × nhóm nghề × cấp bậc × tỉnh (có dòng tổng `ALL`): số tin, phân vị lương, tỉ lệ thỏa thuận | `month` | dbt |
 | Gold | `iceberg.gold.dim_location` | một tỉnh/thành | – | dbt seed |
+| Gold | `iceberg.gold.mart_hiring_weekly` | tuần × nguồn × tỉnh × cấp bậc: số tin mới, trung vị lương, tỉ lệ thỏa thuận | `month(week)`; tăng dần theo tuần | dbt (incremental) |
+| Gold | `iceberg.gold.mart_job_changes_weekly` | tuần × nguồn × nhóm trường: số lần sửa, tăng/giảm lương, sửa sau bao nhiêu ngày | `month(week)`; tăng dần theo tuần | dbt (incremental) |
 | NoSQL | `mongodb.joblens.province_windows` | (cửa sổ 5 phút, tỉnh): số tin, lương trung bình | `_id = "<đầu cửa sổ>\|<mã tỉnh>"` (upsert idempotent) | `stream_province_windows.py` |
 | NoSQL | `mongodb.joblens.analytics_*` | kết quả Spark: lương theo tỉnh (trung vị, trung bình cắt 10%), pivot vùng × cấp bậc, lượng nạp theo giờ, lần chạy + RMSE mô hình | ghi đè mỗi lần chạy | `analytics_spark.py` |
 
 Chất lượng: GX 15 kỳ vọng trên silver (không trùng `job_uid`, mã trong danh mục, lương hợp lệ, ≥ 90% có địa điểm,
-≥ 50% có lương) – kết quả ghi `s3://joblens/quality/gx/`; dbt test trên gold.
+≥ 50% có lương) – kết quả ghi `s3://joblens/quality/gx/`; dbt test trên gold và trên `silver.job_postings_history`
+(bất biến SCD loại 2: khóa không trùng, mỗi tin đúng một phiên bản hiện tại, khoảng hiệu lực liền nhau).
+
+Biến đổi dữ liệu (lịch sử SCD loại 2, gold tăng dần, bố cục vật lý): [`bien-doi-du-lieu.md`](bien-doi-du-lieu.md).
 
 ### 4.3. Số liệu hiện có (lần chạy 2026-10-23/24, `deploy/compat.md`)
 
