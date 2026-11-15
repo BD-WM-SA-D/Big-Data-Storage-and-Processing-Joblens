@@ -92,13 +92,19 @@ def _files(spark, table: str, column: str, keep=None) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> None:
-    p = argparse.ArgumentParser(description="Sắp xếp / đổi partition bảng Iceberg và đo số file ứng viên")
-    p.add_argument("--measure-only", action="store_true", help="Chỉ đo, không đổi bố cục")
+    p = argparse.ArgumentParser(
+        description="Sắp xếp / đổi partition bảng Iceberg và đo số file ứng viên"
+    )
+    p.add_argument(
+        "--measure-only", action="store_true", help="Chỉ đo, không đổi bố cục"
+    )
     p.add_argument("--only", choices=["bronze", "history"], default=None)
     p.add_argument("--history-field", default="months(valid_from)")
     p.add_argument("--no-upload", action="store_true")
     args = p.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     import bronze_jobs
 
@@ -106,16 +112,25 @@ def main(argv: list[str] | None = None) -> None:
     results: list[dict] = []
 
     if args.only in (None, "bronze"):
-        probe_id = (
-            spark.sql(f"""SELECT source_job_id FROM {CATALOG}.{BRONZE} WHERE source = 'vietjobs'
-                          ORDER BY sha1(source_job_id) LIMIT 1""").first()[0]
-        )  # một tin bất kỳ nhưng cố định (cùng id ở mọi lần chạy)
+        probe_id = spark.sql(f"""SELECT source_job_id FROM {CATALOG}.{BRONZE} WHERE source = 'vietjobs'
+                          ORDER BY sha1(source_job_id) LIMIT 1""").first()[
+            0
+        ]  # một tin bất kỳ nhưng cố định (cùng id ở mọi lần chạy)
         vj = lambda part: part["source"] == "vietjobs"  # noqa: E731
         before = _files(spark, BRONZE, "source_job_id", vj)
         st = file_stats(before, probe_id, probe_id)
-        results.append({"table": BRONZE, "probe": f"source_job_id = '{probe_id}'", "stage": "trước", **st})
+        results.append(
+            {
+                "table": BRONZE,
+                "probe": f"source_job_id = '{probe_id}'",
+                "stage": "trước",
+                **st,
+            }
+        )
         if not args.measure_only and before:
-            target = max(MIN_TARGET_BYTES, int(sum(f["bytes"] for f in before) / len(before)))
+            target = max(
+                MIN_TARGET_BYTES, int(sum(f["bytes"] for f in before) / len(before))
+            )
             sql = sort_sql(BRONZE, "source_job_id", target, "source = 'vietjobs'")
             log.info("%s", sql)
             spark.sql(sql).show(truncate=False)
@@ -123,12 +138,21 @@ def main(argv: list[str] | None = None) -> None:
             results.append({"table": BRONZE, "probe": f"source_job_id = '{probe_id}'", "stage": "sau",
                             **file_stats(after, probe_id, probe_id)})  # fmt: skip
 
-    if args.only in (None, "history") and spark.catalog.tableExists(f"{CATALOG}.{HISTORY}"):
+    if args.only in (None, "history") and spark.catalog.tableExists(
+        f"{CATALOG}.{HISTORY}"
+    ):
         hi = datetime.now(timezone.utc).replace(tzinfo=None)
         lo = hi - timedelta(days=7)
         probe = "valid_from trong 7 ngày gần nhất"
         before = _files(spark, HISTORY, "valid_from")
-        results.append({"table": HISTORY, "probe": probe, "stage": "trước", **file_stats(before, lo, hi)})
+        results.append(
+            {
+                "table": HISTORY,
+                "probe": probe,
+                "stage": "trước",
+                **file_stats(before, lo, hi),
+            }
+        )
         spec = spark.sql(f"SELECT * FROM {CATALOG}.{HISTORY}.partitions LIMIT 0").schema
         has_month = "valid_from_month" in json.dumps(spec.jsonValue())
         if not args.measure_only and not has_month:
@@ -138,7 +162,10 @@ def main(argv: list[str] | None = None) -> None:
             results.append({"table": HISTORY, "probe": probe, "stage": "sau",
                             **file_stats(_files(spark, HISTORY, "valid_from"), lo, hi)})  # fmt: skip
         elif has_month:
-            log.info("%s đã có partition months(valid_from) – bỏ qua bước đổi partition", HISTORY)
+            log.info(
+                "%s đã có partition months(valid_from) – bỏ qua bước đổi partition",
+                HISTORY,
+            )
 
     log.info("Kết quả bố cục:\n%s", table_md(results))
     if results and not args.no_upload:

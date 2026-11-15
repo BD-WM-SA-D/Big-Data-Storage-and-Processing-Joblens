@@ -56,12 +56,16 @@ def _edit(payload: dict, rng: random.Random) -> tuple[dict, str]:
         t = p.get("title") or ""
         p["title"] = t[: -len(URGENT)] if t.endswith(URGENT) else t + URGENT
         return p, "title"
-    p["employment_type"] = rng.choice([e for e in EMPLOYMENT_TYPES if e != p.get("employment_type")])
+    p["employment_type"] = rng.choice(
+        [e for e in EMPLOYMENT_TYPES if e != p.get("employment_type")]
+    )
     return p, "employment_type"
 
 
 def _content_hash(payload: dict) -> str:
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    canonical = json.dumps(
+        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
@@ -106,14 +110,29 @@ def simulate(
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(description="Mô phỏng crawl lại hằng ngày (dữ liệu synthetic) vào bronze")
-    ap.add_argument("--jobs", type=int, default=2000, help="Số tin VietJobs lấy làm mẫu")
-    ap.add_argument("--days", type=int, default=28, help="Số ngày mô phỏng, kết thúc hôm nay (UTC)")
+    ap = argparse.ArgumentParser(
+        description="Mô phỏng crawl lại hằng ngày (dữ liệu synthetic) vào bronze"
+    )
+    ap.add_argument(
+        "--jobs", type=int, default=2000, help="Số tin VietJobs lấy làm mẫu"
+    )
+    ap.add_argument(
+        "--days", type=int, default=28, help="Số ngày mô phỏng, kết thúc hôm nay (UTC)"
+    )
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--edit-rate", type=float, default=0.05, help="Xác suất tin bị sửa ở mỗi lần crawl lại")
-    ap.add_argument("--clean", action="store_true", help="Xóa dữ liệu mô phỏng rồi dừng")
+    ap.add_argument(
+        "--edit-rate",
+        type=float,
+        default=0.05,
+        help="Xác suất tin bị sửa ở mỗi lần crawl lại",
+    )
+    ap.add_argument(
+        "--clean", action="store_true", help="Xóa dữ liệu mô phỏng rồi dừng"
+    )
     args = ap.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     from pyspark.sql import functions as F
 
@@ -125,17 +144,27 @@ def main(argv: list[str] | None = None) -> None:
     if args.clean:
         uids = [r[0] for r in spark.table(bronze_jobs.TABLE).filter(F.expr(sim))
                 .select(F.sha1(F.concat_ws(":", "source", "source_job_id"))).distinct().collect()]  # fmt: skip
-        for t in ("silver.job_postings_history", "silver.job_postings_snapshot", "silver.job_postings"):
+        for t in (
+            "silver.job_postings_history",
+            "silver.job_postings_snapshot",
+            "silver.job_postings",
+        ):
             if uids and spark.catalog.tableExists(f"{cat}.{t}"):
-                for i in range(0, len(uids), 1000):  # danh sách IN theo lô để câu lệnh không quá dài
+                for i in range(
+                    0, len(uids), 1000
+                ):  # danh sách IN theo lô để câu lệnh không quá dài
                     in_list = ", ".join(f"'{u}'" for u in uids[i : i + 1000])
                     spark.sql(f"DELETE FROM {cat}.{t} WHERE job_uid IN ({in_list})")
         spark.sql(f"DELETE FROM {bronze_jobs.TABLE} WHERE {sim}")
-        log.info("đã xóa %s tin mô phỏng khỏi bronze, silver, snapshot, history", len(uids))
+        log.info(
+            "đã xóa %s tin mô phỏng khỏi bronze, silver, snapshot, history", len(uids)
+        )
         return
 
     if spark.table(bronze_jobs.TABLE).filter(F.expr(sim)).limit(1).count():
-        raise SystemExit("bronze đã có dữ liệu mô phỏng – chạy --clean trước nếu muốn sinh lại")
+        raise SystemExit(
+            "bronze đã có dữ liệu mô phỏng – chạy --clean trước nếu muốn sinh lại"
+        )
     picked = (
         spark.table(bronze_jobs.TABLE)
         .filter("source = 'vietjobs'")
@@ -147,11 +176,19 @@ def main(argv: list[str] | None = None) -> None:
         .collect()
     )
     jobs = [(r["source_job_id"], json.loads(r["payload_json"])) for r in picked]
-    msgs = simulate(jobs, args.days, datetime.now(timezone.utc).date(), args.seed, args.edit_rate)
+    msgs = simulate(
+        jobs, args.days, datetime.now(timezone.utc).date(), args.seed, args.edit_rate
+    )
     rows = [(TOPIC, -1, i, m["source_job_id"].encode(), json.dumps(m, ensure_ascii=False).encode())
             for i, m in enumerate(msgs)]  # fmt: skip
-    df = spark.createDataFrame(rows, "topic string, partition int, offset long, key binary, value binary")
-    out = bronze_jobs.to_bronze(df).filter(F.col("_valid")).select(*bronze_jobs.BRONZE_COLUMNS)
+    df = spark.createDataFrame(
+        rows, "topic string, partition int, offset long, key binary, value binary"
+    )
+    out = (
+        bronze_jobs.to_bronze(df)
+        .filter(F.col("_valid"))
+        .select(*bronze_jobs.BRONZE_COLUMNS)
+    )
     out.writeTo(bronze_jobs.TABLE).append()
     log.info("mô phỏng %s tin × %s ngày → %s lần crawl ghi vào %s (source = %s)",
              len(jobs), args.days, len(msgs), bronze_jobs.TABLE, SOURCE)  # fmt: skip

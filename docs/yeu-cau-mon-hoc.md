@@ -168,8 +168,8 @@ của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)).
 | 11 | Slide + video dự phòng cho buổi thuyết trình (tuần 13–15) | Thuyết trình | ⬜ |
 | 12 | Hỏi giảng viên: lịch thuyết trình của nhóm, hạn nộp báo cáo, thang điểm | – | ⬜ |
 | 13 | README: điền thành viên, MSSV, vai trò, ngày giảng viên đồng ý | Bài nộp | ⬜ |
-| 14 | **Biến đổi dữ liệu T1** – lịch sử tin SCD loại 2 (`silver.job_postings_history`, `MERGE INTO` / `dbt snapshot`) – [`ke-hoach-mo-rong.md`](ke-hoach-mo-rong.md) mục 2 | Góp ý giảng viên 2026-11 (biến đổi dữ liệu) | 🧪 mã + 10 kiểm thử (`silver_job_history.py`, `recrawl_sim.py`, task DAG) – chờ chạy trên cụm ([`bien-doi-du-lieu.md`](bien-doi-du-lieu.md)) |
-| 15 | **T2** – gold tăng dần (dbt `incremental`) + mart mới, đo dựng lại toàn bộ vs tăng dần | Góp ý giảng viên; L04, L09 | 🧪 2 model dbt incremental + kiểm thử DuckDB; chờ `scripts/bench-dbt-incremental.sh` |
-| 16 | **T6** – sort order / partition evolution trên silver, đo byte/file Trino quét | Góp ý giảng viên; L03 | 🧪 `layout_iceberg.py` + `scripts/bench-layout.sh`; chờ đo |
+| 14 | **Biến đổi dữ liệu T1** – lịch sử tin SCD loại 2 (`silver.job_postings_history`, `MERGE INTO` / `dbt snapshot`) – [`ke-hoach-mo-rong.md`](ke-hoach-mo-rong.md) mục 2 | Góp ý giảng viên 2026-11 (biến đổi dữ liệu) | ✅ 51.223 phiên bản / 50.095 tin, 811 tin từng thay đổi ([`bien-doi-du-lieu.md`](bien-doi-du-lieu.md)) |
+| 15 | **T2** – gold tăng dần (dbt `incremental`) + mart mới, đo dựng lại toàn bộ vs tăng dần | Góp ý giảng viên; L04, L09 | ✅ full-refresh 5,6 s, tăng dần 2,8 s / 0 dòng ([`../benchmarks/incremental_gold.md`](../benchmarks/incremental_gold.md)); còn đo lần tăng dần sau khi sửa tin |
+| 16 | **T6** – sort order / partition evolution trên silver, đo byte/file Trino quét | Góp ý giảng viên; L03 | ✅ bronze 11 → 6 file ứng viên, Trino 10,29 → 7,34 MB; history 2,90 MB → 191,85 kB ([`../benchmarks/layout_iceberg.md`](../benchmarks/layout_iceberg.md)) |
 | 17 | T4 phiên + phễu trên `events.user.v1`; T3 replay Kappa vào nhánh Iceberg (sau khi kiểm tra retention); T5 tỷ giá theo ngày | Góp ý giảng viên; L08, L09 | ⬜ |
 | 18 | Production: Kafka 3 broker + demo hỏng broker (P1), job cảnh báo việc làm (P2), MongoDB replica set (P3), SLO p99,9 (P4), Prometheus + cảnh báo, GitHub Actions | Góp ý giảng viên (production); L06, L08 | ⬜ |

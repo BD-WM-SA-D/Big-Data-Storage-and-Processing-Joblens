@@ -58,8 +58,14 @@ def bronze_df(spark, records, offsets=None):
         (bytes(r["source_job_id"], "utf-8"), json.dumps(r, ensure_ascii=False).encode(), "jobs.raw.topcv.v1", 0, off)
         for r, off in zip(records, offsets or range(len(records)), strict=True)
     ]  # fmt: skip
-    kafka = spark.createDataFrame(rows, "key binary, value binary, topic string, partition int, offset long")
-    return bronze_jobs.to_bronze(kafka).filter("_valid").select(*bronze_jobs.BRONZE_COLUMNS)
+    kafka = spark.createDataFrame(
+        rows, "key binary, value binary, topic string, partition int, offset long"
+    )
+    return (
+        bronze_jobs.to_bronze(kafka)
+        .filter("_valid")
+        .select(*bronze_jobs.BRONZE_COLUMNS)
+    )
 
 
 def history(spark, records, offsets=None):
@@ -68,12 +74,16 @@ def history(spark, records, offsets=None):
 
 
 def test_columns_follow_contract(spark):
-    out = H.build_history(H.crawl_states(bronze_df(spark, [crawl("2026-11-01T00:00:00Z")])), NOW)
+    out = H.build_history(
+        H.crawl_states(bronze_df(spark, [crawl("2026-11-01T00:00:00Z")])), NOW
+    )
     assert out.columns == H.HISTORY_COLUMNS
     try:
         contract = load_table_contract("silver.job_postings_history")
     except (FileNotFoundError, KeyError):
-        pytest.skip("contract chưa có trong gói joblens_contracts đã cài (PR joblens chưa merge)")
+        pytest.skip(
+            "contract chưa có trong gói joblens_contracts đã cài (PR joblens chưa merge)"
+        )
     assert [c["name"] for c in contract["columns"]] == H.HISTORY_COLUMNS
     actual = dict(out.dtypes)
     flat = H.DDL.replace("\n", " ").replace("(", " ").replace(",", " ")
@@ -87,8 +97,15 @@ def test_unchanged_recrawls_collapse_into_one_version(spark):
     rows = history(spark, [crawl(f"2026-11-0{d}T00:00:00Z") for d in (1, 2, 3)])
     assert len(rows) == 1
     r = rows[0]
-    assert (r["version_no"], r["change_type"], r["changed_fields"], r["is_current"]) == (1, "new", [], True)
-    assert r["valid_from"] == datetime(2026, 11, 1) and r["last_seen_ts"] == datetime(2026, 11, 3)
+    assert (
+        r["version_no"],
+        r["change_type"],
+        r["changed_fields"],
+        r["is_current"],
+    ) == (1, "new", [], True)
+    assert r["valid_from"] == datetime(2026, 11, 1) and r["last_seen_ts"] == datetime(
+        2026, 11, 3
+    )
     assert r["valid_to"] is None and r["crawl_count"] == 3 and r["updated_ts"] == NOW
 
 
@@ -104,7 +121,10 @@ def test_salary_change_opens_new_version(spark):
     v1, v2 = rows
     assert v1["valid_to"] == v2["valid_from"] == datetime(2026, 11, 5)
     assert not v1["is_current"] and v2["is_current"]
-    assert v2["change_type"] == "changed" and v2["changed_fields"] == ["salary_min_vnd", "salary_max_vnd"]
+    assert v2["change_type"] == "changed" and v2["changed_fields"] == [
+        "salary_min_vnd",
+        "salary_max_vnd",
+    ]
     assert (v1["salary_min_vnd"], v2["salary_min_vnd"]) == (15_000_000, 18_000_000)
     assert v1["crawl_count"] == 2 and v2["crawl_count"] == 1
     assert v1["attr_hash"] != v2["attr_hash"]
@@ -132,7 +152,9 @@ def test_location_order_is_not_a_change(spark):
             crawl("2026-11-02T00:00:00Z", locations=["Hồ Chí Minh", "Hà Nội"]),
         ],
     )
-    assert len(rows) == 1 and rows[0]["location_codes"] == sorted(rows[0]["location_codes"])
+    assert len(rows) == 1 and rows[0]["location_codes"] == sorted(
+        rows[0]["location_codes"]
+    )
 
 
 def test_arrival_order_does_not_matter(spark):
@@ -144,7 +166,13 @@ def test_arrival_order_does_not_matter(spark):
     ]
     in_order = history(spark, recs, [0, 1, 2])
     late = history(spark, [recs[2], recs[0], recs[1]], [0, 1, 2])
-    key = lambda rows: [(r["version_no"], r["valid_from"], r["valid_to"], r["salary_min_vnd"]) for r in rows]  # noqa: E731
+
+    def key(rows):
+        return [
+            (r["version_no"], r["valid_from"], r["valid_to"], r["salary_min_vnd"])
+            for r in rows
+        ]
+
     assert key(in_order) == key(late)
     assert [r["salary_min_vnd"] for r in late] == [15_000_000, 18_000_000, 20_000_000]
 
@@ -156,8 +184,13 @@ def test_exact_duplicate_crawl_counted_once(spark):
 
 
 def _ops(spark, new_records, current_records, new_offsets=None, current_offsets=None):
-    new = H.build_history(H.crawl_states(bronze_df(spark, new_records, new_offsets)), NOW)
-    cur = H.build_history(H.crawl_states(bronze_df(spark, current_records, current_offsets)), datetime(2026, 11, 1))
+    new = H.build_history(
+        H.crawl_states(bronze_df(spark, new_records, new_offsets)), NOW
+    )
+    cur = H.build_history(
+        H.crawl_states(bronze_df(spark, current_records, current_offsets)),
+        datetime(2026, 11, 1),
+    )
     out = H.merge_changes(new, cur)
     assert out.columns == [*H.HISTORY_COLUMNS, "_op"]
     return sorted((r["version_no"], r["_op"]) for r in out.collect())

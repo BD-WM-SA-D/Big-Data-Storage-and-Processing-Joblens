@@ -137,8 +137,13 @@ Dọn dữ liệu mô phỏng: `EXECUTORS=0 bash deploy/spark/submit.sh recrawl_
 
 ## 6. Kết quả và việc còn lại
 
-- Số đo: [`../benchmarks/incremental_gold.md`](../benchmarks/incremental_gold.md),
-  [`../benchmarks/layout_iceberg.md`](../benchmarks/layout_iceberg.md) – `<cần đo>` cho tới khi chạy trên cụm.
+- Lần chạy 1 (2026-11-15, `42fff10`): history 51.223 phiên bản của 50.095 tin, 811 tin từng thay đổi, mỗi tin đúng
+  một phiên bản hiện tại. Gold: dựng lại toàn bộ 5,6 s, tăng dần khi không có dữ liệu mới 2,8 s và 0 dòng ghi
+  ([`../benchmarks/incremental_gold.md`](../benchmarks/incremental_gold.md)). Bố cục: tra một tin bronze 11 → 6 file,
+  byte Trino đọc 10,29 → 7,34 MB; lịch sử 7 ngày 2,90 MB → 191,85 kB
+  ([`../benchmarks/layout_iceberg.md`](../benchmarks/layout_iceberg.md)).
+- Chưa đo: lần chạy tăng dần sau khi có một lần sửa tin (`scripts/demo-data.sh update` rồi
+  `bash scripts/bench-dbt-incremental.sh --inc-only`).
 - Phát hiện khi viết test: `gold.mart_salary_role_region` tính dòng tổng (`ALL`) bằng `grouping sets` trên bảng đã tách
   địa điểm → `job_count` đúng (đếm distinct) nhưng phân vị lương và `negotiable_share` đếm tin nhiều địa điểm nhiều lần.
   Chưa sửa (đổi số liệu đã chốt) – `<cần quyết định của nhóm>`.

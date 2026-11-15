@@ -60,5 +60,11 @@ def test_edits_change_tracked_fields_and_hash():
 
 
 def test_salary_text_parses_back_with_real_rules():
-    assert normalize.parse_salary(R._salary_text(17_250_000, 28_750_000))[:2] == (17_000_000, 29_000_000)
-    assert normalize.parse_salary(R._salary_text(20_000_000, None))[:2] == (20_000_000, None)
+    assert normalize.parse_salary(R._salary_text(17_250_000, 28_750_000))[:2] == (
+        17_000_000,
+        29_000_000,
+    )
+    assert normalize.parse_salary(R._salary_text(20_000_000, None))[:2] == (
+        20_000_000,
+        None,
+    )

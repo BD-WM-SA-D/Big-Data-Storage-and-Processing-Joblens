@@ -166,7 +166,9 @@ def build_history(states: DataFrame, now: datetime | None = None) -> DataFrame:
         "valid_from",
         "valid_to",
         F.col("valid_to").isNull().alias("is_current"),
-        F.when(F.col("version_no") == 1, "new").otherwise("changed").alias("change_type"),
+        F.when(F.col("version_no") == 1, "new")
+        .otherwise("changed")
+        .alias("change_type"),
         "changed_fields",
         "source",
         *TRACKED,
@@ -199,7 +201,11 @@ def merge_changes(new: DataFrame, current: DataFrame) -> DataFrame:
         .filter(F.col("_op").isNotNull())
         .select(
             *_KEYS,
-            *[F.col(f"n.{col}").alias(col) for col in HISTORY_COLUMNS if col not in _KEYS],
+            *[
+                F.col(f"n.{col}").alias(col)
+                for col in HISTORY_COLUMNS
+                if col not in _KEYS
+            ],
             "_op",
         )
     )
@@ -208,8 +214,12 @@ def merge_changes(new: DataFrame, current: DataFrame) -> DataFrame:
 def main(argv: list[str] | None = None) -> None:
     import bronze_jobs
 
-    p = argparse.ArgumentParser(description="bronze.jobs_raw → silver.job_postings_history (SCD loại 2)")
-    p.add_argument("--full", action="store_true", help="Bỏ qua mốc, tính lại lịch sử của mọi tin")
+    p = argparse.ArgumentParser(
+        description="bronze.jobs_raw → silver.job_postings_history (SCD loại 2)"
+    )
+    p.add_argument(
+        "--full", action="store_true", help="Bỏ qua mốc, tính lại lịch sử của mọi tin"
+    )
     args = p.parse_args(argv)
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -218,11 +228,18 @@ def main(argv: list[str] | None = None) -> None:
     spark: SparkSession = bronze_jobs.build_session("silver-job-history")
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.silver")
     spark.sql(DDL)
-    props = {r["key"]: r["value"] for r in spark.sql(f"SHOW TBLPROPERTIES {HISTORY}").collect()}
+    props = {
+        r["key"]: r["value"]
+        for r in spark.sql(f"SHOW TBLPROPERTIES {HISTORY}").collect()
+    }
     mark = None if args.full else props.get(WATERMARK_PROP)
 
     bronze = with_job_uid(spark.table(BRONZE))
-    fresh = bronze.filter(F.col("ingest_ts") > F.lit(mark).cast("timestamp")) if mark else bronze
+    fresh = (
+        bronze.filter(F.col("ingest_ts") > F.lit(mark).cast("timestamp"))
+        if mark
+        else bronze
+    )
     new_mark = fresh.agg(F.max("ingest_ts")).first()[0]
     if new_mark is None:
         log.info("không có dòng bronze mới sau mốc %s – lịch sử giữ nguyên", mark)
@@ -234,11 +251,16 @@ def main(argv: list[str] | None = None) -> None:
     new = build_history(crawl_states(crawls))
     current = spark.table(HISTORY).join(touched, "job_uid", "left_semi")
     changes = merge_changes(new, current).persist()
-    ops = {r["_op"]: r["n"] for r in changes.groupBy("_op").agg(F.count("*").alias("n")).collect()}
+    ops = {
+        r["_op"]: r["n"]
+        for r in changes.groupBy("_op").agg(F.count("*").alias("n")).collect()
+    }
     if ops:
         changes.createOrReplaceTempView("history_changes")
         spark.sql(MERGE_SQL)
-    spark.sql(f"ALTER TABLE {HISTORY} SET TBLPROPERTIES ('{WATERMARK_PROP}' = '{new_mark.isoformat()}')")
+    spark.sql(
+        f"ALTER TABLE {HISTORY} SET TBLPROPERTIES ('{WATERMARK_PROP}' = '{new_mark.isoformat()}')"
+    )
     log.info("tin bị ảnh hưởng %s (mốc bronze %s → %s); thêm %s, sửa %s, xóa %s phiên bản",
              n_touched, mark, new_mark, ops.get("I", 0), ops.get("U", 0), ops.get("D", 0))  # fmt: skip
 
@@ -249,8 +271,12 @@ def main(argv: list[str] | None = None) -> None:
         FROM {HISTORY}""").first()  # fmt: skip
     log.info("silver.job_postings_history: %s phiên bản của %s tin (%s dòng hiện tại), %s tin từng thay đổi",
              s["versions"], s["jobs"], s["current_rows"], s["jobs_changed"])  # fmt: skip
-    if s["current_rows"] != s["jobs"]:  # bất biến SCD2: mỗi tin đúng một phiên bản hiện tại
-        raise RuntimeError(f"Sai bất biến: {s['current_rows']} dòng is_current cho {s['jobs']} tin")
+    if (
+        s["current_rows"] != s["jobs"]
+    ):  # bất biến SCD2: mỗi tin đúng một phiên bản hiện tại
+        raise RuntimeError(
+            f"Sai bất biến: {s['current_rows']} dòng is_current cho {s['jobs']} tin"
+        )
     touched.unpersist()
     changes.unpersist()
 
