@@ -14,8 +14,10 @@ Thiết kế: [`../docs/bien-doi-du-lieu.md`](../docs/bien-doi-du-lieu.md) mục
 | full-refresh | mart_job_changes_weekly | success | 5.6 | 12 |
 | tăng dần (không có dữ liệu mới) | mart_hiring_weekly | success | 2.8 | 0 |
 | tăng dần (không có dữ liệu mới) | mart_job_changes_weekly | success | 2.8 | 0 |
-| tăng dần (sau một lần sửa tin) | mart_hiring_weekly | `<cần đo>` | `<cần đo>` | `<cần đo>` |
-| tăng dần (sau một lần sửa tin) | mart_job_changes_weekly | `<cần đo>` | `<cần đo>` | `<cần đo>` |
+| tăng dần (sau 2 tin demo mới + silver đánh dấu tin hết hạn) | mart_hiring_weekly | success | 3.5 | 303 |
+| tăng dần (sau 2 tin demo mới + silver đánh dấu tin hết hạn) | mart_job_changes_weekly | success | 2.7 | 0 |
+| tăng dần (sau một lần sửa lương, `demo-data.sh update`) | mart_hiring_weekly | success | 2.8 | 62 |
+| tăng dần (sau một lần sửa lương, `demo-data.sh update`) | mart_job_changes_weekly | success | 2.8 | 3 |
 
 Nhận xét:
 - Khi không có dữ liệu mới, lần chạy tăng dần không ghi dòng nào (0 tuần bị ảnh hưởng) và mất 2,8 s so với 5,6 s của
@@ -25,3 +27,11 @@ Nhận xét:
   lại** tuần không đổi (không sinh file/snapshot mới). Ở quy mô nhiều tháng dữ liệu, phần quét và ghi bỏ được sẽ lớn hơn
   – chưa đo.
 - Thời gian đo theo `execution_time` của `run_results.json`; hai model chạy song song nên cùng thời gian kết thúc.
+- Sau một lần sửa lương: chỉ tuần hiện tại được tính lại – 62/451 dòng `mart_hiring_weekly`, 3/12 dòng
+  `mart_job_changes_weekly`; tin demo có 2 phiên bản đúng (v1 đóng lúc 13:18:43, v2 `changed_fields =
+  [salary_min_vnd, salary_max_vnd]`).
+- **Bài học:** lần chạy có thêm tin mới phải tính lại 303/451 dòng, vì `silver_job_postings` đánh dấu hết hạn các tin
+  mô phỏng không thấy lại sau 7 ngày (`UPDATE … updated_ts = current_timestamp()`) → tuần của các tin đó bị coi là
+  "đổi". Kết quả vẫn đúng nhưng phạm vi tăng dần rộng ra. Cách thu hẹp (chưa làm): cột thời điểm đổi riêng cho các cột
+  mart dùng, hoặc bỏ `is_active` khỏi điều kiện tuần bị ảnh hưởng của `mart_hiring_weekly` (mart này không dùng
+  `is_active`).
