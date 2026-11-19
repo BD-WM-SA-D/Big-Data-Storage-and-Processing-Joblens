@@ -69,6 +69,43 @@ profile_values() {
   if [ "$PROFILE" = lite ] && [ -f "$1/values-lite.yaml" ]; then echo "-f $1/values-lite.yaml"; fi
 }
 
+# joblens_dir [PREFERRED] – in thư mục gốc repo joblens có fixtures.
+# Tìm lần lượt: tham số, biến JOBLENS_DIR, clone cạnh repo, $HOME/joblens, rồi checkout trong uv cache
+# (pyproject phụ thuộc joblens-contracts nên uv đã clone sẵn repo joblens).
+joblens_dir() {
+  local preferred="${1:-}" d cache fixture
+  local -a candidates=()
+  [ -n "$preferred" ] && candidates+=("$preferred")
+  [ -n "${JOBLENS_DIR:-}" ] && candidates+=("$JOBLENS_DIR")
+  candidates+=("${REPO_ROOT}/../joblens" "$HOME/joblens")
+  for d in "${candidates[@]}"; do
+    [ -f "$d/fixtures/job_posting.v1.sample.json" ] && { printf '%s\n' "$d"; return 0; }
+  done
+  cache="$(uv cache dir 2>/dev/null || true)"
+  if [ -n "$cache" ] && [ -d "$cache/git-v1/checkouts" ]; then
+    fixture="$(find "$cache/git-v1/checkouts" -path '*/fixtures/job_posting.v1.sample.json' -print -quit 2>/dev/null)"
+    if [ -n "$fixture" ]; then printf '%s\n' "${fixture%/fixtures/job_posting.v1.sample.json}"; return 0; fi
+  fi
+  return 1
+}
+
+# trino_coord [NAMESPACE] – in tên pod Trino coordinator đang Ready (mới nhất), chờ tối đa ~60 giây.
+# Dùng thay cho "kubectl get pod --field-selector=status.phase=Running": pod vừa rollout có thể còn
+# Running nhưng container đã bị thay → kubectl exec báo "container not found".
+trino_coord() {
+  local ns="${1:-serving}" pod
+  for _ in $(seq 1 30); do
+    pod=$(kubectl get pod -n "$ns" -l app.kubernetes.io/component=coordinator \
+      --sort-by=.metadata.creationTimestamp \
+      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.phase}{" "}{.status.containerStatuses[0].ready}{"\n"}{end}' 2>/dev/null \
+      | awk '$2 == "Running" && $3 == "true" { p = $1 } END { print p }')
+    if [ -n "$pod" ]; then printf '%s\n' "$pod"; return 0; fi
+    sleep 2
+  done
+  echo "Không tìm thấy pod Trino coordinator Ready trong namespace $ns" >&2
+  return 1
+}
+
 # stop_spark_job PREFIX – dừng job Spark có tên bắt đầu bằng PREFIX trong namespace compute (cả hai chế độ:
 # cluster mode → pod driver/executor; local mode → Job do submit.sh tạo). Ví dụ: stop_spark_job bronze-jobs
 stop_spark_job() {

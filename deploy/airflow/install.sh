@@ -65,11 +65,27 @@ EOF
 
 echo "==> Airflow (chart ${AIRFLOW_CHART_VERSION})"
 helm repo add apache-airflow https://airflow.apache.org >/dev/null 2>&1 || true
-helm repo update apache-airflow >/dev/null
+helm repo update apache-airflow >/dev/null 2>&1 || true
+# archive.apache.org hay timeout → ưu tiên chart tải sẵn, chưa có thì lấy từ GitHub release.
+AIRFLOW_CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/joblens"
+AIRFLOW_TGZ="${AIRFLOW_CHART_TGZ:-${AIRFLOW_CACHE}/airflow-${AIRFLOW_CHART_VERSION}.tgz}"
+if [ ! -f "$AIRFLOW_TGZ" ] && [ -z "${AIRFLOW_CHART_TGZ:-}" ]; then
+  mkdir -p "$(dirname "$AIRFLOW_TGZ")"
+  echo "   tải chart từ GitHub release (archive.apache.org thường timeout)"
+  if ! curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 -o "$AIRFLOW_TGZ" \
+    "https://github.com/apache/airflow/releases/download/helm-chart%2F${AIRFLOW_CHART_VERSION}/airflow-${AIRFLOW_CHART_VERSION}.tgz"; then
+    rm -f "$AIRFLOW_TGZ"
+  fi
+fi
+if [ -f "$AIRFLOW_TGZ" ]; then
+  CHART_REF="$AIRFLOW_TGZ"; CHART_ARGS=()
+else
+  CHART_REF="apache-airflow/airflow"; CHART_ARGS=(--version "$AIRFLOW_CHART_VERSION")
+fi
 # Job không phải hook thì không sửa tại chỗ được (spec bất biến) → xóa bản cũ, helm tạo lại (migrate chạy lại vẫn an toàn)
 kubectl delete job -n "$NS" airflow-run-airflow-migrations airflow-create-user --ignore-not-found >/dev/null
 # shellcheck disable=SC2046  # profile_values cố ý tách thành hai đối số (-f FILE)
-helm upgrade --install airflow apache-airflow/airflow --version "$AIRFLOW_CHART_VERSION" -n "$NS" \
+helm upgrade --install airflow "$CHART_REF" "${CHART_ARGS[@]}" -n "$NS" \
   -f "${HERE}/values.yaml" $(profile_values "$HERE") -f "$VARS" \
   --set-string createUserJob.defaultUser.password="$(secret_val airflow-admin password)" \
   --wait --timeout 15m

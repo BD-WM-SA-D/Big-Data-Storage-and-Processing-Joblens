@@ -1,5 +1,7 @@
 # Bổ sung cho values.yaml khi JOBLENS_PROFILE=lite (máy 8 GB) – install.sh tự thêm "-f values-lite.yaml".
-# Heap 768 MB: đủ cho các truy vấn demo và dbt trên ~50 nghìn tin; truy vấn lớn hơn có thể báo hết bộ nhớ.
+# CẢNH BÁO: profile lite KHÔNG đủ cho `dbt build` trên ~48 nghìn tin – Trino coordinator bị OOMKilled
+# (exit 137) dù đã chạy 1 luồng. Chạy dbt với JOBLENS_PROFILE=full (máy ≥16 GB) hoặc tăng limits lên
+# ≥2304Mi như values.yaml. Lite chỉ dùng cho truy vấn/demo nhẹ.
 server:
   config:
     query:

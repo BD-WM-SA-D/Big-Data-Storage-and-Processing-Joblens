@@ -26,6 +26,12 @@ kubectl rollout restart deployment -n "$NS" -l app.kubernetes.io/name=trino >/de
 kubectl rollout status deployment -n "$NS" -l app.kubernetes.io/name=trino --timeout=5m
 
 echo "==> Kiểm tra: SHOW SCHEMAS FROM iceberg"
-COORD=$(kubectl get pod -n "$NS" -l app.kubernetes.io/component=coordinator --field-selector=status.phase=Running -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n "$NS" "$COORD" -- trino --execute "SHOW SCHEMAS FROM iceberg"
+# Pod vừa rollout restart có thể còn Running nhưng container đã bị thay → exec báo "container not found".
+ok=0
+for _ in $(seq 1 10); do
+  COORD="$(trino_coord "$NS")" || break
+  if kubectl exec -n "$NS" "$COORD" -- trino --execute "SHOW SCHEMAS FROM iceberg"; then ok=1; break; fi
+  sleep 2
+done
+[ "$ok" -eq 1 ] || { echo "Không chạy được truy vấn kiểm tra Trino" >&2; exit 1; }
 echo "Mở trình duyệt Trino UI: kubectl port-forward -n $NS svc/trino 8080:8080  →  http://localhost:8080 (user bất kỳ)"

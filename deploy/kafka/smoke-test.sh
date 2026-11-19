@@ -3,8 +3,15 @@
 # vào jobs.raw.topcv.v1 với key = source_job_id, rồi đọc lại. Không dùng crawler thật.
 # Chạy từ gốc repo:  bash deploy/kafka/smoke-test.sh [đường dẫn tới repo joblens]
 set -euo pipefail
-
-JOBLENS_DIR="${1:-../joblens}"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=../lib.sh
+. "${HERE}/../lib.sh"
+JOBLENS_DIR="$(joblens_dir "${1:-}")" || {
+  echo "Không thấy fixtures của repo joblens." >&2
+  echo "Clone cạnh repo này:  git clone https://github.com/BD-WM-SA-D/joblens.git ../joblens" >&2
+  echo "Hoặc truyền đường dẫn: bash deploy/kafka/smoke-test.sh /path/to/joblens" >&2
+  exit 1
+}
 FIXTURE="${JOBLENS_DIR}/fixtures/job_posting.v1.sample.json"
 IMAGE=quay.io/strimzi/kafka:1.2.0-kafka-4.3.1
 BOOTSTRAP=joblens-kafka-bootstrap:9092

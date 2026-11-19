@@ -76,6 +76,15 @@ else
     && echo "   đã tạo warehouse 'joblens'"
 fi
 
+# Warehouse giữ khóa S3 lúc tạo. Nếu .env bị tạo lại (khóa trống → sinh khóa mới) hoặc khóa bị xoay,
+# phải đồng bộ credential mới, nếu không Spark/dbt ghi sẽ lỗi InvalidAccessKeyId dù SeaweedFS đã nhận khóa mới.
+WID="$(curl -sf "$MGMT/warehouse" | jget '[w["id"] for w in d["warehouses"] if w["name"] == "joblens"][0]')"
+if [ -n "$WID" ]; then
+  python3 -c 'import json,os; print(json.dumps({"new-storage-credential": {"type": "s3", "credential-type": "access-key", "access-key-id": os.environ["JOBLENS_S3_ACCESS_KEY_ID"], "secret-access-key": os.environ["JOBLENS_S3_SECRET_ACCESS_KEY"]}}))' \
+    | curl -sf -X POST "$MGMT/warehouse/$WID/storage-credential" -H 'Content-Type: application/json' --data-binary @- >/dev/null \
+    && echo "   đã đồng bộ khóa S3 cho warehouse 'joblens'"
+fi
+
 echo "==> Kiểm tra"
 kubectl get pods -n "$NS"
 curl -sf "$MGMT/warehouse" | jget '"Warehouse: " + ", ".join(w["name"] for w in d["warehouses"])'

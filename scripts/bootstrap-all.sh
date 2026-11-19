@@ -25,7 +25,9 @@ if [ -z "${SKIP_DATA:-}" ]; then
     step "6. VietJobs → bronze (batch)"; DRIVER_MEMORY=2g bash deploy/spark/submit.sh vietjobs --sink bronze
   fi
   step "7. bronze → silver";    bash deploy/spark/submit.sh silver_job_postings
-  step "8. dbt gold";           bash scripts/dbt.sh build
+  step "8. dbt gold"
+  [ "${JOBLENS_PROFILE:-full}" = lite ] && echo "   CẢNH BÁO: profile lite dễ OOMKilled ở bước này; dùng JOBLENS_PROFILE=full nếu máy ≥16 GB."
+  bash scripts/dbt.sh build
 fi
 
 step "9. Grafana + Kafka UI";   bash deploy/monitoring/install.sh
