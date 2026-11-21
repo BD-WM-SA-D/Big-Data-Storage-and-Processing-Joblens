@@ -26,10 +26,14 @@ def columns(name: str) -> list[tuple[str, str, bool]]:
 @pytest.mark.parametrize("name", sorted(M.TABLES))
 def test_ddl_matches_contract(name):
     c = load_table_contract(name)
-    expected = [(col["name"], SPARK[col["type"]], col["nullable"]) for col in c["columns"]]
+    expected = [
+        (col["name"], SPARK[col["type"]], col["nullable"]) for col in c["columns"]
+    ]
     assert columns(name) == expected
     assert [M.TABLES[name][1]] == c["partition_spec"]
-    assert c["writer_repo"] == "Web-mining-joblens"  # bảng của WM: repo này chỉ tạo, không ghi
+    assert (
+        c["writer_repo"] == "Web-mining-joblens"
+    )  # bảng của WM: repo này chỉ tạo, không ghi
 
 
 def test_ddl_is_idempotent_create():

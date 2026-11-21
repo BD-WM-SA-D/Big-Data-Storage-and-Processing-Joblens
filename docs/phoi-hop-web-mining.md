@@ -130,6 +130,9 @@ Không gửi dữ liệu crawl ra dịch vụ ngoài; không commit dữ liệu 
    ký tự "tương thích" (chữ full-width, chữ ghép kiểu ﬁ…). Ủng hộ đề xuất đưa một hàm vào `joblens_contracts` (cần nhóm
    đồng ý vì sửa `joblens`).
 
+**Đã chạy trên cụm (2026-11-21, `2f94ca0`, chế độ `off`):** tạo `bronze.reviews_raw` và 3 bảng silver của WM; `dbt build`
+PASS=53, ERROR=0 (4 bảng gold mới dựng được, bảng đọc kết quả WM còn rỗng).
+
 **Còn mở:** buổi chạy chung producer → Kafka cụm BD; đo RAM/thời gian image full trên 50k tin; đếm theo `dup_group_id`
 trong `mart_salary_role_region` (đổi số đã chốt – chờ nhóm, cùng lúc sửa lỗi dòng `ALL` đếm trùng tin nhiều địa điểm);
 `dim_skill.label` hiện là cách viết gặp nhiều nhất – đổi sang danh mục kỹ năng chính thức khi WM gắn ESCO.

@@ -67,11 +67,17 @@ def ensure(spark) -> list[str]:
 def main() -> None:
     import bronze_jobs
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
     spark = bronze_jobs.build_session("mining-tables")
     spark.sql(f"CREATE NAMESPACE IF NOT EXISTS {CATALOG}.silver")
     created = ensure(spark)
-    log.info("bảng mới: %s; đã có từ trước: %s", created or "–", [t for t in TABLES if t not in created] or "–")
+    log.info(
+        "bảng mới: %s; đã có từ trước: %s",
+        created or "–",
+        [t for t in TABLES if t not in created] or "–",
+    )
 
 
 if __name__ == "__main__":

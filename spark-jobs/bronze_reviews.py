@@ -90,9 +90,13 @@ def to_bronze(kafka_df: DataFrame, ingest_ts: Column | None = None) -> DataFrame
         F.col("topic").alias("kafka_topic"),
         F.col("partition").cast("int").alias("kafka_partition"),
         F.col("offset").cast("long").alias("kafka_offset"),
-        (ingest_ts if ingest_ts is not None else F.current_timestamp()).alias("ingest_ts"),
+        (ingest_ts if ingest_ts is not None else F.current_timestamp()).alias(
+            "ingest_ts"
+        ),
         msg["source"].alias("source"),
-        F.coalesce(F.col("key").cast("string"), msg["source_review_id"]).alias("source_review_id"),
+        F.coalesce(F.col("key").cast("string"), msg["source_review_id"]).alias(
+            "source_review_id"
+        ),
         msg["company_id"].alias("company_id"),
         F.to_timestamp(msg["crawl_ts"]).alias("crawl_ts"),
         msg["content_hash"].alias("content_hash"),
@@ -103,7 +107,9 @@ def to_bronze(kafka_df: DataFrame, ingest_ts: Column | None = None) -> DataFrame
     valid = F.lit(True)
     for c in REVIEW_COLUMNS:
         valid = valid & F.col(c).isNotNull()
-    missing = F.concat_ws(",", *[F.when(F.col(c).isNull(), F.lit(c)) for c in REVIEW_COLUMNS])
+    missing = F.concat_ws(
+        ",", *[F.when(F.col(c).isNull(), F.lit(c)) for c in REVIEW_COLUMNS]
+    )
     reason = (
         F.when(valid, F.lit(None).cast("string"))
         .when(F.try_parse_json("_value").isNull(), F.lit("invalid_json"))
@@ -122,7 +128,9 @@ def main(argv: list[str] | None = None) -> None:
 
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
 
     spark = bronze_jobs.build_session("bronze-reviews")
     for ns in ("bronze", "silver"):

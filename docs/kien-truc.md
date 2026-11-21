@@ -123,6 +123,11 @@ Chất lượng: GX 15 kỳ vọng trên silver (không trùng `job_uid`, mã tr
 
 Biến đổi dữ liệu (lịch sử SCD loại 2, gold tăng dần, bố cục vật lý): [`bien-doi-du-lieu.md`](bien-doi-du-lieu.md).
 
+**Bài học vận hành (2026-11-21):** đổi quy tắc chuẩn hóa thì phải chạy lại silver cho dữ liệu cũ. Ngưỡng lương 300 triệu
+đổi ngày 04/11 nhưng silver không được chuẩn hóa lại; kiểm tra GX (đã đổi cùng ngưỡng) hỏng mỗi giờ từ 15/11 và chặn gold
+mà không ai thấy. Sửa: `silver_job_postings --full` (MERGE cập nhật cả dòng cùng `last_seen_ts`). Cách tránh: mỗi lần đổi
+`normalize.py` thì chạy `--full` (hoặc replay Kappa vào nhánh Iceberg – kế hoạch T3) và xem trạng thái DAG sau khi bật lại.
+
 ### 4.3. Số liệu hiện có (lần chạy 2026-10-23/24, `deploy/compat.md`)
 
 | Chỉ số | Giá trị |
