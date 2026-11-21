@@ -4,7 +4,9 @@ sources:
   - name: silver
     database: iceberg
     schema: silver
-    description: Bảng silver do spark-jobs/silver_job_postings.py, silver_job_history.py ghi (contract joblens).
+    description: >
+      Bảng silver (contract joblens): job_postings*, job_postings_history do repo này ghi (spark-jobs);
+      job_skills, job_dedup, review_aspects do image Web Mining ghi (ADR 0001 D3) – repo này chỉ tạo bảng và đọc.
     tables:
       - name: job_postings
         description: Tin đã chuẩn hóa – joblens/schemas/tables/silver/job_postings.yaml 0.2.0
@@ -46,3 +48,44 @@ sources:
               - accepted_values:
                   arguments:
                     values: [new, changed]
+
+      - name: job_skills
+        description: Kỹ năng trích từ tin – image skill-extractor (WM) ghi; joblens silver.job_skills 0.1.1
+        columns:
+          - name: job_uid
+            data_tests: [not_null]
+          - name: skill_id
+            data_tests: [not_null]
+
+      - name: job_dedup
+        description: Nhóm tin trùng – image job-dedup (WM) ghi; joblens silver.job_dedup 0.1.1
+        columns:
+          - name: job_uid
+            data_tests: [not_null, unique]
+          - name: dup_group_id
+            data_tests: [not_null]
+
+      - name: review_aspects
+        description: Khía cạnh + cảm xúc trong review – image absa-scorer (WM) ghi; joblens silver.review_aspects 0.2.0
+        data_tests:
+          - unique_combination:
+              arguments:
+                columns: [review_uid, sentence_index, aspect]
+        columns:
+          - name: polarity
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: [positive, negative, neutral]
+
+  - name: bronze
+    database: iceberg
+    schema: bronze
+    description: Bảng bronze do spark-jobs ghi (contract joblens).
+    tables:
+      - name: reviews_raw
+        description: Review thô từ Kafka – spark-jobs/bronze_reviews.py; joblens bronze.reviews_raw 0.1.0
+        data_tests:
+          - unique_combination:
+              arguments:
+                columns: [kafka_topic, kafka_partition, kafka_offset]

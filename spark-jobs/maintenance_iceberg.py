@@ -27,6 +27,8 @@ DEFAULT_TABLES = [
     "silver.job_postings",
     "silver.job_postings_snapshot",
     "silver.job_postings_history",
+    "bronze.reviews_raw",
+    # silver.job_skills / job_dedup / review_aspects do image WM ghi – không bảo trì ở đây (không ghi bảng repo khác)
 ]
 TARGET_FILE_BYTES = 128 * 1024 * 1024
 

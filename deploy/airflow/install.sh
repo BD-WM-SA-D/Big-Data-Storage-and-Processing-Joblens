@@ -51,6 +51,10 @@ echo "==> DAG (ConfigMap joblens-dags từ airflow/dags/)"
 kubectl create configmap joblens-dags -n "$NS" --from-file="${REPO_ROOT}/airflow/dags/" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
+# Image mô hình Web Mining: chế độ + tag do deploy/mining/install.sh ghi vào ConfigMap joblens-mining; chưa cài → off
+mining() { kubectl get configmap joblens-mining -n "$NS" -o jsonpath="{.data.$1}" 2>/dev/null || true; }
+MINING_MODE="$(mining mode)"; MINING_MODE="${MINING_MODE:-off}"
+
 # Airflow Variables cho DAG: tag image đổi theo commit nên sinh file values tạm (không commit)
 VARS="$(mktemp --suffix=.yaml)"; trap 'rm -f "$VARS"' EXIT
 cat > "$VARS" <<EOF
@@ -61,6 +65,14 @@ env:
     value: "${DBT_IMAGE}"
   - name: AIRFLOW_VAR_JOBLENS_SPARK_EXECUTORS
     value: "$([ "$PROFILE" = lite ] && echo 0 || echo 1)"
+  - name: AIRFLOW_VAR_JOBLENS_MINING_MODE
+    value: "${MINING_MODE}"
+  - name: AIRFLOW_VAR_JOBLENS_SKILL_EXTRACTOR_IMAGE
+    value: "$(mining skill_extractor)"
+  - name: AIRFLOW_VAR_JOBLENS_JOB_DEDUP_IMAGE
+    value: "$(mining job_dedup)"
+  - name: AIRFLOW_VAR_JOBLENS_ABSA_SCORER_IMAGE
+    value: "$(mining absa_scorer)"
 EOF
 
 echo "==> Airflow (chart ${AIRFLOW_CHART_VERSION})"
@@ -86,7 +98,7 @@ cat <<EOF
 
 Airflow UI:  kubectl port-forward -n ${NS} svc/airflow-api-server 8082:8080  →  http://localhost:8082
              (hoặc bash scripts/demo-ui.sh)  – đăng nhập: admin / $(secret_val airflow-admin password)
-Image của DAG: ${SPARK_IMAGE}, ${DBT_IMAGE}
+Image của DAG: ${SPARK_IMAGE}, ${DBT_IMAGE}; mô hình Web Mining: ${MINING_MODE}
 DAG joblens_pipeline mặc định đang tạm dừng: bật công tắc trên giao diện hoặc
   kubectl exec -n ${NS} statefulset/airflow-scheduler -c scheduler -- airflow dags unpause joblens_pipeline
 EOF

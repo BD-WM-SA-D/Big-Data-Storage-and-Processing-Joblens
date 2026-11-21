@@ -2,19 +2,27 @@
 ### joblens_pipeline – điều phối tầng batch của nền tảng JobLens (IT4931)
 
 ```
-silver_job_postings ──> silver_job_history ──> gx_validate_silver ──┬──> dbt_build_gold   (Trino: seed + gold + test)
-                                                                   └──> spark_analytics ──> iceberg_maintenance
-                                                                        (Spark → MongoDB)    (compaction + dọn snapshot)
+silver_job_postings → silver_job_history → bronze_reviews → gx_validate_silver ─┬→ mining_enabled → mining_skills
+                                                                                │    → mining_dedup → mining_absa
+                                                                                │    → dbt_build_gold (none_failed)
+                                                                                └→ spark_analytics → iceberg_maintenance
 ```
 
 - **silver_job_postings** – Spark đọc phần bronze mới (mốc `joblens.bronze_watermark`), chuẩn hóa, `MERGE INTO`
   `silver.job_postings` và ghi ảnh chụp ngày vào `silver.job_postings_snapshot`.
 - **silver_job_history** – Spark tính lại lịch sử phiên bản (SCD loại 2) của các tin có bản crawl mới, từ mọi lần
   crawl trong bronze, rồi một lệnh `MERGE INTO` vào `silver.job_postings_history` (chỉ ghi dòng thay đổi).
+- **bronze_reviews** – Spark đọc review thô `reviews.raw.*.v1` → `bronze.reviews_raw` (MERGE chỉ thêm, không trùng);
+  tạo sẵn 3 bảng silver mà image Web Mining ghi (rỗng nếu chưa chạy image).
+- **mining_enabled → mining_skills → mining_dedup → mining_absa** – image mô hình của Web Mining (ADR 0001 D3):
+  `skill-extractor` → `silver.job_skills`, `job-dedup` → `silver.job_dedup`, `absa-scorer` → `silver.review_aspects`.
+  Variable `joblens_mining_mode` = `off` (mặc định) thì bỏ qua cả ba, gold vẫn chạy; `stub`/`full` do
+  `deploy/mining/install.sh` đặt. Repo này chỉ lên lịch và cấp cấu hình, không ghi các bảng đó.
 - **gx_validate_silver** – Great Expectations kiểm tra silver (khóa, danh mục, khoảng lương, mã tỉnh, độ phủ);
   có kỳ vọng hỏng thì task đỏ và hai task sau không chạy – gold giữ bản cũ, không bị ghi đè bằng dữ liệu sai.
 - **dbt_build_gold** – `dbt build` trên Trino: `gold.dim_location`, `gold.mart_salary_role_region`, hai mart tăng dần
-  `gold.mart_hiring_weekly`, `gold.mart_job_changes_weekly` (chỉ tính lại tuần có thay đổi) và test dữ liệu;
+  `gold.mart_hiring_weekly`, `gold.mart_job_changes_weekly` (chỉ tính lại tuần có thay đổi), 4 bảng từ kết quả Web
+  Mining (`dim_skill`, `mart_skill_demand_monthly`, `dim_company`, `mart_company_aspect_sentiment`) và test dữ liệu;
   test lỗi thì task đỏ, dữ liệu gold sai không được coi là xong.
 - **spark_analytics** – phân tích bằng Spark (pivot, hàm tổng hợp tùy biến, broadcast/sort-merge join, window,
   thống kê, MLlib) → MongoDB `analytics_*`; kế hoạch thực thi lưu ở `s3://joblens/reports/spark-plans/`.
@@ -30,6 +38,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
+from airflow.providers.standard.operators.python import ShortCircuitOperator
 from airflow.sdk import DAG
 from kubernetes.client import models as k8s
 
@@ -39,6 +48,8 @@ SPARK_IMAGE = "{{ var.value.joblens_spark_image }}"
 DBT_IMAGE = "{{ var.value.joblens_dbt_image }}"
 # 0 = Spark local mode trong pod task (máy 8 GB, JOBLENS_PROFILE=lite); mặc định 1 executor
 SPARK_EXECUTORS = "{{ var.value.get('joblens_spark_executors', '1') }}"
+# Image mô hình Web Mining (deploy/mining/install.sh): off | stub | full – off thì 3 task mô hình bị bỏ qua
+MINING_MODE = "{{ var.value.get('joblens_mining_mode', 'off') }}"
 
 
 def _field_env(name: str, path: str) -> k8s.V1EnvVar:
@@ -89,6 +100,46 @@ def spark_task(
     )
 
 
+def mining_enabled(mode: str) -> bool:
+    return mode in ("stub", "full")
+
+
+def mining_task(
+    task_id: str, image_var: str, input_table: str, output_table: str
+) -> KubernetesPodOperator:
+    """Task chạy image mô hình của Web Mining theo hợp đồng ADR 0001 D3. Image đọc/ghi Iceberg bằng pyiceberg qua
+    REST catalog (biến JOBLENS_*), chỉ ghi bảng của WM; repo này chỉ cấp cấu hình, bảng và lịch chạy."""
+    return KubernetesPodOperator(
+        task_id=task_id,
+        name=f"joblens-{task_id.replace('_', '-')}",
+        namespace=js.NAMESPACE,
+        image="{{ var.value.joblens_" + image_var + "_image }}",
+        image_pull_policy="IfNotPresent",  # image nạp thẳng vào k3d (deploy/mining/install.sh), không có registry
+        arguments=[
+            "--input-table",
+            input_table,
+            "--output-table",
+            output_table,
+            "--run-id",
+            "{{ run_id }}",
+        ],  # fmt: skip
+        env_vars=[k8s.V1EnvVar(name=k, value=v) for k, v in js.CLUSTER_ENV.items()],
+        env_from=[
+            k8s.V1EnvFromSource(secret_ref=k8s.V1SecretEnvSource(name=js.S3_SECRET))
+        ],
+        container_resources=k8s.V1ResourceRequirements(
+            requests={"cpu": "250m", "memory": "512Mi"},
+            limits={
+                "memory": "3Gi"
+            },  # bản full chạy PhoBERT trên CPU; bản stub dùng < 300 Mi
+        ),
+        labels={"app.kubernetes.io/part-of": "joblens", "joblens/owner": "web-mining"},
+        get_logs=True,
+        on_finish_action="delete_succeeded_pod",
+        startup_timeout_seconds=300,
+    )
+
+
 with DAG(
     dag_id="joblens_pipeline",
     description="bronze → silver (Spark) → gold (dbt/Trino) + bảo trì Iceberg",
@@ -103,6 +154,26 @@ with DAG(
     silver = spark_task("silver_job_postings", "silver_job_postings")
 
     history = spark_task("silver_job_history", "silver_job_history")
+
+    # review thô Kafka → bronze.reviews_raw; tạo sẵn bảng silver của WM (rỗng) để dbt luôn có nguồn
+    reviews = spark_task("bronze_reviews", "bronze_reviews")
+
+    mining_gate = ShortCircuitOperator(
+        task_id="mining_enabled",
+        python_callable=mining_enabled,
+        op_kwargs={"mode": MINING_MODE},
+        # chỉ bỏ qua task ngay sau; các task sau tự tính theo trigger rule → dbt_build_gold (none_failed) vẫn chạy
+        ignore_downstream_trigger_rules=False,
+    )
+    skills = mining_task(
+        "mining_skills", "skill_extractor", "silver.job_postings", "silver.job_skills"
+    )
+    dedup = mining_task(
+        "mining_dedup", "job_dedup", "silver.job_postings", "silver.job_dedup"
+    )
+    absa = mining_task(
+        "mining_absa", "absa_scorer", "bronze.reviews_raw", "silver.review_aspects"
+    )
 
     gold = KubernetesPodOperator(
         task_id="dbt_build_gold",
@@ -119,6 +190,7 @@ with DAG(
         get_logs=True,
         on_finish_action="delete_succeeded_pod",
         startup_timeout_seconds=300,
+        trigger_rule="none_failed",  # chạy cả khi 3 task mô hình bị bỏ qua (chế độ off), không chạy khi có lỗi
     )
 
     quality = spark_task("gx_validate_silver", "gx_silver")
@@ -127,6 +199,7 @@ with DAG(
 
     maintenance = spark_task("iceberg_maintenance", "maintenance_iceberg")
 
-    # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt nhẹ, chạy song song với bảo trì)
-    silver >> history >> quality >> [gold, analytics]
+    # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt và image stub nhẹ, chạy song song với Spark)
+    silver >> history >> reviews >> quality >> [mining_gate, analytics]
+    mining_gate >> skills >> dedup >> absa >> gold
     analytics >> maintenance

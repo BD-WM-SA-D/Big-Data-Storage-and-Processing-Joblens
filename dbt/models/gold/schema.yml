@@ -64,3 +64,49 @@ models:
                 values: [title, company, salary, location, level, experience, employment_type, deadline]
       - name: change_count
         data_tests: [not_null]
+
+  - name: dim_skill
+    description: Danh mục kỹ năng từ silver.job_skills (WM) – contract joblens gold.dim_skill 0.2.0
+    columns:
+      - name: skill_id
+        data_tests: [not_null, unique]
+      - name: label
+        data_tests: [not_null]
+
+  - name: mart_skill_demand_monthly
+    description: Nhu cầu kỹ năng theo tháng × nhóm nghề, đếm theo nhóm tin trùng – contract joblens gold.mart_skill_demand_monthly 0.1.2
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [month, skill_id, category_source]
+    columns:
+      - name: share
+        data_tests: [not_null]
+      - name: skill_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_skill')
+                field: skill_id
+
+  - name: dim_company
+    description: Công ty gộp giữa tin và review – contract joblens gold.dim_company 0.1.0
+    columns:
+      - name: company_key
+        data_tests: [not_null, unique]
+      - name: company_name
+        data_tests: [not_null]
+
+  - name: mart_company_aspect_sentiment
+    description: Đánh giá công ty theo khía cạnh (ABSA của WM + sao ITviec) – contract joblens gold.mart_company_aspect_sentiment 0.1.1
+    data_tests:
+      - unique_combination:
+          arguments:
+            columns: [company_key, aspect]
+    columns:
+      - name: company_key
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_company')
+                field: company_key

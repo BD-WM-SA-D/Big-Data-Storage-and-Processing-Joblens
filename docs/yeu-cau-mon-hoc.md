@@ -164,7 +164,7 @@ của [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md)).
 | 7 | Chuyển ADR 0001 (Lambda/Kappa) sang "Đã chấp nhận" sau việc 2, 3 | Báo cáo phần 2 | 🧪 |
 | 8 | Điền 5 chỗ `<cần đo>` + viết các bài học bổ sung ở mục 5 | Báo cáo phần 4 | 🧪 |
 | 9 | Viết báo cáo phần 1–3 thành văn (không chép nguyên văn giữa các báo cáo môn – R3; không dùng chung hình – R5) | Báo cáo | ⬜ |
-| 10 | Ghép với Web Mining theo [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md) (crawler → Kafka, image mô hình, mart gold còn thiếu) | Hệ thống hoàn chỉnh | ⬜ |
+| 10 | Ghép với Web Mining theo [`phoi-hop-web-mining.md`](phoi-hop-web-mining.md) (crawler → Kafka, image mô hình, mart gold còn thiếu) | Hệ thống hoàn chỉnh | 🧪 phía BD xong mã (issue #2): `bronze_reviews`, bảng WM, 3 task mô hình, 4 bảng gold – chờ WM sửa pyiceberg-core rồi chạy stub trên cụm; chưa có buổi gửi dữ liệu crawl |
 | 11 | Slide + video dự phòng cho buổi thuyết trình (tuần 13–15) | Thuyết trình | ⬜ |
 | 12 | Hỏi giảng viên: lịch thuyết trình của nhóm, hạn nộp báo cáo, thang điểm | – | ⬜ |
 | 13 | README: điền thành viên, MSSV, vai trò, ngày giảng viên đồng ý | Bài nộp | ⬜ |

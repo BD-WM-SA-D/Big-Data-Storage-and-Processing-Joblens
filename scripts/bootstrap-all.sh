@@ -25,6 +25,8 @@ if [ -z "${SKIP_DATA:-}" ]; then
     step "6. VietJobs → bronze (batch)"; DRIVER_MEMORY=2g bash deploy/spark/submit.sh vietjobs --sink bronze
   fi
   step "7. bronze → silver";    bash deploy/spark/submit.sh silver_job_postings
+  # review Kafka → bronze.reviews_raw + tạo bảng silver của Web Mining (rỗng) – dbt đọc các bảng này
+  step "7b. review → bronze, bảng WM"; bash deploy/spark/submit.sh bronze_reviews
   step "8. dbt gold";           bash scripts/dbt.sh build
 fi
 

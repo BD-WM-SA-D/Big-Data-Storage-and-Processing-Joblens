@@ -45,16 +45,21 @@ flowchart LR
   B -- "Spark MERGE INTO + chuẩn hóa<br/>silver_job_postings" --> S
   B -- "tính lại lịch sử tin bị ảnh hưởng<br/>silver_job_history (MERGE I/U/D)" --> H
   SIM[recrawl_sim<br/>crawl lại mô phỏng] -. "synthetic" .-> B
+  KR[(topic reviews.raw.*.v1)] -- "bronze_reviews<br/>(MERGE chỉ thêm)" --> BR[(bronze.reviews_raw)]
+  WM[[image Web Mining<br/>skill-extractor · job-dedup · absa-scorer<br/>pod do Airflow chạy]]
+  S & BR --> WM
+  WM -- "pyiceberg (WM ghi)" --> SW[(silver.job_skills<br/>job_dedup · review_aspects)]
+  SW -- "dbt" --> GW[(gold.dim_skill · mart_skill_demand_monthly<br/>dim_company · mart_company_aspect_sentiment)]
   S -- "GX 15 kỳ vọng (cổng)" --> S
   S -- "dbt-trino" --> G
   S & H -- "dbt incremental<br/>delete+insert theo tuần" --> GI
   S -- "Spark analytics + MLlib<br/>analytics_spark" --> M
-  B & S & H & G & GI --> T
+  B & S & H & G & GI & GW --> T
   M --> T
   T --> GF
 ```
 
-Điều phối: Airflow 3.3.2, DAG `joblens_pipeline` (mỗi giờ) – `silver_job_postings` → `silver_job_history` → `gx_validate_silver` →
+Điều phối: Airflow 3.3.2, DAG `joblens_pipeline` (mỗi giờ) – `silver_job_postings` → `silver_job_history` → `bronze_reviews` → `gx_validate_silver` → (`mining_skills` → `mining_dedup` → `mining_absa`, image Web Mining, bật bằng `deploy/mining/install.sh`) →
 {`dbt_build_gold`, `spark_analytics` → `iceberg_maintenance`}. Task GX hỏng thì gold không được xây lại. Mỗi task là
 một pod trong namespace `compute` (KubernetesPodOperator); các job Spark chạy `spark-submit` lên Kubernetes.
 
