@@ -5,8 +5,10 @@
 #   2. tạo bronze.reviews_raw và 3 bảng silver của WM (Spark job bronze_reviews – image WM không tự tạo bảng);
 #   3. ghi chế độ cho DAG vào ConfigMap joblens-mining (orchestration) rồi cài lại Airflow để DAG nhận Variable.
 # Chạy từ gốc repo:  bash deploy/mining/install.sh [stub|full|off]   (mặc định stub)
-#   full: image có model do WM build trên máy WM (cần thư mục data/ không có trong git) – WM gửi file image
-#         (docker save) qua kênh nội bộ rồi: docker load -i <file> && k3d image import <tag> -c joblens
+#   full: bản thật do WM build trên máy WM vì cần thư mục data/ không có trong git – skill-extractor target `ml`
+#         (PhoBERT, ~3,4 GB), job-dedup và absa-scorer target `light` (không torch). Tag không có hậu tố -stub,
+#         cùng commit WM_REF. WM gửi file image (docker save) qua kênh nội bộ; trên máy này: docker load -i <file>
+#         rồi chạy lại script với full (script tự k3d image import).
 #   off:  tắt 3 task mô hình trong DAG (gold vẫn chạy, các bảng WM để rỗng)
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"

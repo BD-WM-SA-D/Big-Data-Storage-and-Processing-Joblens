@@ -170,3 +170,24 @@ def test_mining_tasks_follow_d3_contract():
         True,
         False,
     ]
+
+
+def test_mining_tasks_filter_sources_and_only_skills_is_incremental():
+    """WM 0.1.1/0.2.1: chỉ đưa tin crawl vào mô hình; chỉ skill-extractor chạy tăng dần (absa lọc theo crawl_ts
+    sẽ bỏ sót review gửi muộn, dedup cần cả kho tin)."""
+    src = (DAGS / "joblens_pipeline.py").read_text(encoding="utf-8")
+    assert '"--sources",\n            MINING_SOURCES,' in src
+    assert "'joblens_mining_sources', 'topcv,itviec'" in src
+    calls = {
+        m.group(1): m.group(0)
+        for m in re.finditer(r'mining_task\(\s*"(\w+)".*?\)', src, re.S)
+    }
+    assert (
+        "--changed-since" in calls["mining_skills"]
+        and 'memory="4Gi"' in calls["mining_skills"]
+    )
+    assert (
+        "--changed-since" not in calls["mining_dedup"]
+        and "--changed-since" not in calls["mining_absa"]
+    )
+    assert "prev_start_date_success" in src

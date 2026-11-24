@@ -50,6 +50,15 @@ DBT_IMAGE = "{{ var.value.joblens_dbt_image }}"
 SPARK_EXECUTORS = "{{ var.value.get('joblens_spark_executors', '1') }}"
 # Image mô hình Web Mining (deploy/mining/install.sh): off | stub | full – off thì 3 task mô hình bị bỏ qua
 MINING_MODE = "{{ var.value.get('joblens_mining_mode', 'off') }}"
+# Chỉ đưa tin crawl thật vào mô hình (--sources, WM 0.1.1/0.2.1): bỏ vietjobs và dữ liệu mô phỏng synthetic – bản mô
+# phỏng trùng tiêu đề + công ty với tin VietJobs gốc nên job-dedup sẽ gộp chúng
+MINING_SOURCES = "{{ var.value.get('joblens_mining_sources', 'topcv,itviec') }}"
+# Chạy tăng dần: chỉ tin có updated_ts (do silver_job_postings đặt lúc MERGE) từ lần chạy thành công trước. Gối lên
+# phần của lần trước một chút là chủ ý – image ghi bằng "xóa theo khóa rồi ghi" nên xử lý lại không sinh trùng.
+# Lần chạy đầu (chưa có lần thành công) truyền chuỗi rỗng → image xử lý toàn bộ.
+CHANGED_SINCE = (
+    "{{ prev_start_date_success.isoformat() if prev_start_date_success else '' }}"
+)
 
 
 def _field_env(name: str, path: str) -> k8s.V1EnvVar:
@@ -105,7 +114,12 @@ def mining_enabled(mode: str) -> bool:
 
 
 def mining_task(
-    task_id: str, image_var: str, input_table: str, output_table: str
+    task_id: str,
+    image_var: str,
+    input_table: str,
+    output_table: str,
+    extra_args: list[str] | None = None,
+    memory: str = "1Gi",
 ) -> KubernetesPodOperator:
     """Task chạy image mô hình của Web Mining theo hợp đồng ADR 0001 D3. Image đọc/ghi Iceberg bằng pyiceberg qua
     REST catalog (biến JOBLENS_*), chỉ ghi bảng của WM; repo này chỉ cấp cấu hình, bảng và lịch chạy."""
@@ -122,6 +136,9 @@ def mining_task(
             output_table,
             "--run-id",
             "{{ run_id }}",
+            "--sources",
+            MINING_SOURCES,
+            *(extra_args or []),
         ],  # fmt: skip
         env_vars=[k8s.V1EnvVar(name=k, value=v) for k, v in js.CLUSTER_ENV.items()],
         env_from=[
@@ -129,9 +146,7 @@ def mining_task(
         ],
         container_resources=k8s.V1ResourceRequirements(
             requests={"cpu": "250m", "memory": "512Mi"},
-            limits={
-                "memory": "3Gi"
-            },  # bản full chạy PhoBERT trên CPU; bản stub dùng < 300 Mi
+            limits={"memory": memory},
         ),
         labels={"app.kubernetes.io/part-of": "joblens", "joblens/owner": "web-mining"},
         get_logs=True,
@@ -165,12 +180,18 @@ with DAG(
         # chỉ bỏ qua task ngay sau; các task sau tự tính theo trigger rule → dbt_build_gold (none_failed) vẫn chạy
         ignore_downstream_trigger_rules=False,
     )
+    # skill-extractor bản ml chạy PhoBERT trên CPU (image 3,4 GB) → giới hạn 4 Gi; hai job còn lại không dùng torch
     skills = mining_task(
-        "mining_skills", "skill_extractor", "silver.job_postings", "silver.job_skills"
-    )
+        "mining_skills", "skill_extractor", "silver.job_postings", "silver.job_skills",
+        extra_args=["--changed-since", CHANGED_SINCE], memory="4Gi",
+    )  # fmt: skip
+    # dedup cần cả kho tin crawl để so cặp → không chạy tăng dần (WM không nhận --changed-since cho job này)
     dedup = mining_task(
         "mining_dedup", "job_dedup", "silver.job_postings", "silver.job_dedup"
     )
+    # absa: KHÔNG truyền --changed-since – mốc của job này là crawl_ts (thời điểm crawl), mà review crawl từ trước
+    # rồi mới gửi vào Kafka (replay) có crawl_ts cũ hơn lần chạy trước nên sẽ bị bỏ sót. Review ít (vài trăm) nên
+    # xử lý lại toàn bộ mỗi lần; đề nghị WM đổi mốc sang ingest_ts (cột của bronze) – issue #2.
     absa = mining_task(
         "mining_absa", "absa_scorer", "bronze.reviews_raw", "silver.review_aspects"
     )

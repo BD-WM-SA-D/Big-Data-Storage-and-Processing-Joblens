@@ -118,6 +118,14 @@ Không gửi dữ liệu crawl ra dịch vụ ngoài; không commit dữ liệu 
 | Bật/tắt | Airflow Variable `joblens_mining_mode` (qua Helm values) | `off` (mặc định): 3 task bị bỏ qua, gold vẫn chạy; `stub`/`full`: chạy image |
 | Gold | `dbt/models/gold/{dim_skill,mart_skill_demand_monthly,dim_company,mart_company_aspect_sentiment}.sql` | đếm theo `dup_group_id`; bỏ `vietjobs` (skill demand) và `synthetic`; kiểm thử DuckDB `tests/test_dbt_mining_marts.py` |
 
+**Cập nhật 2026-11-24 – WM `17b4730` đã sửa:** thêm `pyiceberg-core` (ghi được bảng partition), `models.yaml` có
+`version`/`tag` cho cả 3 image (skill-extractor 0.2.1, job-dedup 0.1.1, absa-scorer 0.1.1), tham số `--sources` và
+`--changed-since`, image tách 3 bản `stub` / `light` (job-dedup, absa-scorer, không torch) / `ml` (skill-extractor).
+BD đã đổi `WM_REF=17b4730`; DAG truyền `--sources topcv,itviec` cho cả 3 task, `--changed-since` (lần chạy thành công
+trước) cho skill-extractor; **không** truyền cho absa-scorer vì mốc của job đó là `crawl_ts` – review gửi muộn hơn lúc
+crawl sẽ bị bỏ sót (đề nghị WM đổi sang `ingest_ts`). Bản `light`/`ml` cần `data/` nên WM build và gửi file image.
+Thí nghiệm dữ liệu crawl thật qua Kafka: [`thi-nghiem-du-lieu-that.md`](thi-nghiem-du-lieu-that.md).
+
 **Phát hiện khi kiểm thử phía BD – WM cần sửa trước khi bật `stub`:**
 
 1. **Image không ghi được vào bảng có partition.** Nhóm `lakehouse` của WM cài `pyiceberg[s3fs,sql-sqlite]` mà không có

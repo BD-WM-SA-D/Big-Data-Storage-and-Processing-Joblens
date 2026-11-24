@@ -45,6 +45,18 @@ spec:
         port: 9092
         type: internal
         tls: false
+      # Cho producer chạy NGOÀI cụm (crawler của Web Mining trên máy thành viên) qua kubectl port-forward:
+      # broker quảng bá localhost:9094 trên listener này, nên client nối localhost:9094 → port-forward → broker.
+      # Chỉ dùng trên máy dev (không mở cổng ra mạng). Mở: bash scripts/ingest-crawl.sh (tự port-forward).
+      - name: local
+        port: 9094
+        type: internal
+        tls: false
+        configuration:
+          brokers:
+            - broker: 0
+              advertisedHost: localhost
+              advertisedPort: 9094
     config:
       # Một broker nên mọi hệ số nhân bản = 1
       offsets.topic.replication.factor: 1
