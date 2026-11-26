@@ -2,9 +2,11 @@
 ### joblens_pipeline – điều phối tầng batch của nền tảng JobLens (IT4931)
 
 ```
-silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold        (Trino: seed + gold + kiểm thử dữ liệu)
-                                            └──> spark_analytics ──> iceberg_maintenance
-                                                 (Spark → MongoDB)    (compaction + dọn snapshot)
+silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold ──┐  (Trino: seed + gold + kiểm thử dữ liệu)
+                                             └──> spark_analytics ──> iceberg_maintenance ──┤
+                                                  (Spark → MongoDB)    (compaction + dọn snapshot)
+                                                                                            v
+                                                                              gold_freshness_check
 ```
 
 - **silver_job_postings** – Spark đọc phần bronze mới (mốc `joblens.bronze_watermark`), chuẩn hóa, `MERGE INTO`
@@ -16,6 +18,10 @@ silver_job_postings ──> gx_validate_silver ──┬──> dbt_build_gold  
 - **spark_analytics** – phân tích bằng Spark (pivot, hàm tổng hợp tùy biến, broadcast/sort-merge join, window,
   thống kê, MLlib) → MongoDB `analytics_*`; kế hoạch thực thi lưu ở `s3://joblens/reports/spark-plans/`.
 - **iceberg_maintenance** – gộp file nhỏ do streaming sinh ra, gộp manifest, xóa snapshot cũ (giữ 10 bản gần nhất).
+- **gold_freshness_check** – Spark đọc thời điểm làm mới gold gần nhất từ metadata Iceberg và `max(month)` để
+  đối chiếu; ngưỡng warn 90 / error 180 phút lấy từ env là **ngưỡng chính sách**, không phải số đo. Quá ngưỡng
+  error thì task đỏ. `execution_timeout` 45 phút là giá trị khởi đầu, hiệu chỉnh qua
+  `JOBLENS_DAG_EXECUTION_TIMEOUT_MINUTES` khi có số đo thật.
 
 Job streaming `bronze_jobs` (Kafka → bronze) chạy liên tục bên ngoài DAG; DAG chỉ xử lý phần batch phía sau.
 Mỗi task là một pod trong namespace `compute`. Image lấy từ Airflow Variable `joblens_spark_image`,
@@ -24,6 +30,7 @@ Mỗi task là một pod trong namespace `compute`. Image lấy từ Airflow Var
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta, timezone
 
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
@@ -36,6 +43,17 @@ SPARK_IMAGE = "{{ var.value.joblens_spark_image }}"
 DBT_IMAGE = "{{ var.value.joblens_dbt_image }}"
 # 0 = Spark local mode trong pod task (máy 8 GB, JOBLENS_PROFILE=lite); mặc định 1 executor
 SPARK_EXECUTORS = "{{ var.value.get('joblens_spark_executors', '1') }}"
+EXECUTION_TIMEOUT_MINUTES = int(
+    os.environ.get("JOBLENS_DAG_EXECUTION_TIMEOUT_MINUTES", "45")
+)
+FRESHNESS_ENV = {
+    "JOBLENS_FRESHNESS_WARN_MINUTES": os.environ.get(
+        "JOBLENS_FRESHNESS_WARN_MINUTES", "90"
+    ),
+    "JOBLENS_FRESHNESS_ERROR_MINUTES": os.environ.get(
+        "JOBLENS_FRESHNESS_ERROR_MINUTES", "180"
+    ),
+}
 
 
 def _field_env(name: str, path: str) -> k8s.V1EnvVar:
@@ -66,6 +84,7 @@ def spark_task(
             k8s.V1EnvVar(name="JOBLENS_SPARK_IMAGE", value=SPARK_IMAGE),
             k8s.V1EnvVar(name="JOBLENS_SPARK_EXECUTORS", value=SPARK_EXECUTORS),
             *(k8s.V1EnvVar(name=k, value=v) for k, v in js.CLUSTER_ENV.items()),
+            *(k8s.V1EnvVar(name=k, value=v) for k, v in FRESHNESS_ENV.items()),
         ],
         env_from=[
             k8s.V1EnvFromSource(secret_ref=k8s.V1SecretEnvSource(name=js.S3_SECRET)),
@@ -93,7 +112,11 @@ with DAG(
     start_date=datetime(2026, 10, 1, tzinfo=timezone.utc),
     catchup=False,
     max_active_runs=1,
-    default_args={"retries": 1, "retry_delay": timedelta(minutes=2)},
+    default_args={
+        "retries": 1,
+        "retry_delay": timedelta(minutes=2),
+        "execution_timeout": timedelta(minutes=EXECUTION_TIMEOUT_MINUTES),
+    },
     tags=["joblens", "it4931"],
     doc_md=__doc__,
 ) as dag:
@@ -122,6 +145,11 @@ with DAG(
 
     maintenance = spark_task("iceberg_maintenance", "maintenance_iceberg")
 
+    gold_freshness = spark_task(
+        task_id="gold_freshness_check", job="gold_freshness_check"
+    )
+
     # tuần tự để vừa máy 8 GB: không chạy hai job Spark cùng lúc (dbt nhẹ, chạy song song với bảo trì)
     silver >> quality >> [gold, analytics]
     analytics >> maintenance
+    [gold, maintenance] >> gold_freshness
