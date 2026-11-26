@@ -7,6 +7,10 @@ gold không được xây lại (docs/project-plan/03: "GE + dbt tests gate publ
   thuộc danh mục, lương nằm trong khoảng hợp lý và max ≥ min, mã tỉnh thuộc 34 mã sau sắp xếp 2025.
 * **Độ phủ** (`mostly`): tỉ lệ tin có địa điểm ≥ 90%, có lương ≥ 50%. Ngưỡng là chỉ tiêu nhóm đặt ra, ghi ở
   THRESHOLDS – đổi ngưỡng phải ghi lý do vào commit.
+* **Độ tươi xử lý**: `now - max(updated_ts)` so với `JOBLENS_FRESHNESS_WARN_MINUTES` (mặc định 90) và
+  `JOBLENS_FRESHNESS_ERROR_MINUTES` (mặc định 180). `last_seen_ts` là event time của nguồn, không dùng để chấm
+  độ tươi pipeline vì replay/backfill đưa tin cũ. Hai giá trị này là **ngưỡng chính sách** do nhóm đặt,
+  không phải số đo p95; quá ngưỡng error thì kỳ vọng hỏng, quá ngưỡng warn thì chỉ bật cờ `warn` trong kết quả.
 
 Kết quả (JSON của GX) ghi vào s3://joblens/quality/gx/silver_job_postings/<thời điểm>.json để tra lại, và in
 bảng tóm tắt ra log (thấy trên giao diện Airflow).
@@ -36,9 +40,58 @@ import normalize as N  # noqa: E402
 
 SOURCES = ["topcv", "itviec", "vietjobs", "synthetic"]
 THRESHOLDS = {"has_location": 0.90, "has_salary": 0.50}
+DEFAULT_FRESHNESS_WARN_MINUTES = 90
+DEFAULT_FRESHNESS_ERROR_MINUTES = 180
+FRESHNESS_WARN_ENV = "JOBLENS_FRESHNESS_WARN_MINUTES"
+FRESHNESS_ERROR_ENV = "JOBLENS_FRESHNESS_ERROR_MINUTES"
 RESULT_PREFIX = "s3://joblens/quality/gx/silver_job_postings"
 
 log = logging.getLogger("gx_silver")
+
+
+def freshness_thresholds() -> tuple[int, int]:
+    """Ngưỡng độ tươi tính bằng phút, đọc từ env; đây là ngưỡng chính sách, không phải số đo."""
+    warn = int(os.environ.get(FRESHNESS_WARN_ENV, str(DEFAULT_FRESHNESS_WARN_MINUTES)))
+    error = int(
+        os.environ.get(FRESHNESS_ERROR_ENV, str(DEFAULT_FRESHNESS_ERROR_MINUTES))
+    )
+    if warn <= 0 or error <= 0 or warn > error:
+        raise ValueError(
+            f"Ngưỡng độ tươi không hợp lệ: warn={warn}, error={error} (phút)"
+        )
+    return warn, error
+
+
+def _as_utc_naive(value: datetime) -> datetime:
+    return value.replace(tzinfo=None) if value.tzinfo else value
+
+
+def freshness_result(
+    silver: DataFrame, now: datetime, thresholds: tuple[int, int] | None = None
+) -> dict:
+    """Tuổi của bản silver mới nhất, so với ngưỡng chính sách warn/error."""
+    warn, error = thresholds or freshness_thresholds()
+    checked_at = _as_utc_naive(now)
+    max_ts = silver.agg(F.max("updated_ts")).first()[0]
+    max_ts = _as_utc_naive(max_ts) if max_ts is not None else None
+    age_minutes = (
+        float("inf") if max_ts is None else (checked_at - max_ts).total_seconds() / 60
+    )
+    age_text = "không có dòng" if max_ts is None else f"{age_minutes:.1f} phút"
+    return {
+        "suite": "silver_freshness",
+        "expectation": "expect_max_updated_ts_age",
+        "column": "updated_ts",
+        "mostly": 1.0,
+        "success": age_minutes <= error,
+        "unexpected_percent": None,
+        "observed": f"now - max(updated_ts) = {age_text}; warn {warn} phút, error {error} phút",
+        "warn": age_minutes > warn,
+        "warn_threshold_minutes": warn,
+        "error_threshold_minutes": error,
+        "max_updated_ts": max_ts.isoformat() if max_ts is not None else None,
+        "checked_at": checked_at.isoformat(),
+    }
 
 
 def location_codes(csv_path: str | None = None) -> list[str]:
@@ -104,8 +157,10 @@ def location_expectations(gxe, codes: list[str]) -> list:
     return [gxe.ExpectColumnValuesToBeInSet(column="location_code", value_set=codes)]
 
 
-def validate(silver: DataFrame, codes: list[str]) -> list[dict]:
-    """Chạy hai bộ kỳ vọng, trả danh sách kết quả gọn: name, column, success, unexpected_percent, observed."""
+def validate(
+    silver: DataFrame, codes: list[str], now: datetime | None = None
+) -> list[dict]:
+    """Chạy hai bộ kỳ vọng và kiểm tra độ tươi; mỗi phần tử gồm column, success, unexpected_percent, observed."""
     import great_expectations as gx
     import great_expectations.expectations as gxe
 
@@ -148,6 +203,7 @@ def validate(silver: DataFrame, codes: list[str]) -> list[dict]:
                     "observed": r.result.get("observed_value"),
                 }
             )
+    out.append(freshness_result(silver, now or datetime.now(timezone.utc)))
     return out
 
 
@@ -159,6 +215,7 @@ def summary_table(results: list[dict]) -> str:
             f"{'ĐẠT' if r['success'] else 'HỎNG':4} {r['expectation']:48} {str(r['column'])[:34]:34} "
             f"{'' if pct is None else f'{pct:.2f}':>8}  {'' if r['mostly'] == 1.0 else r['mostly']}"
             + ("" if r["observed"] is None else f"  (giá trị: {r['observed']})")
+            + ("  [warn]" if r.get("warn") else "")
         )
     ok = sum(r["success"] for r in results)
     lines.append(f"→ {ok}/{len(results)} kỳ vọng đạt")
@@ -211,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     spark = bronze_jobs.build_session("gx-silver")
     silver = spark.table(f"{bronze_jobs.CATALOG}.silver.job_postings")
     now = datetime.now(timezone.utc)
-    results = validate(silver, location_codes())
+    results = validate(silver, location_codes(), now=now)
     log.info("Kết quả GX trên silver.job_postings:\n%s", summary_table(results))
     if not args.no_upload:
         log.info("đã ghi %s", _upload(results, now))

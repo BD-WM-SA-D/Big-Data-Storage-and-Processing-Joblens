@@ -7,7 +7,8 @@ Chạy batch (Airflow gọi định kỳ, hoặc tay qua deploy/spark/submit.sh 
 3. Chuẩn hóa payload bằng quy tắc (normalize.py – ADR 0001 D2).
 4. MERGE INTO silver.job_postings: bản mới hơn thì cập nhật toàn bộ, bản cũ hơn chỉ nới first_seen_ts.
 5. Đánh dấu hết hạn (is_active = false) khi qua deadline hoặc không thấy lại sau --stale-days ngày.
-6. Ghi snapshot ngày hôm nay vào silver.job_postings_snapshot (chạy lại trong ngày thì ghi đè ngày đó).
+6. Ghi snapshot ngày hôm nay vào silver.job_postings_snapshot bằng INSERT OVERWRITE phân vùng snapshot_date
+   (một commit; chạy lại trong ngày thì ghi đè ngày đó, không có khoảng trống giữa DELETE và INSERT).
 
 Cột theo contract joblens/schemas/tables/silver/job_postings.yaml (0.2.0) và job_postings_snapshot.yaml (0.1.0).
 """
@@ -117,6 +118,16 @@ TBLPROPERTIES ('format-version' = '2', 'comment' = 'Trạng thái tin mỗi ngà
 """
 
 log = logging.getLogger("silver_job_postings")
+
+
+def snapshot_overwrite_sql(snap: date) -> str:
+    """Ghi đè nguyên tử phân vùng ngày của snapshot; Iceberg overwrite động theo snapshot_date trong SELECT."""
+    return (
+        f"INSERT OVERWRITE {SNAPSHOT} "
+        f"SELECT DATE '{snap.isoformat()}' AS snapshot_date, "
+        "job_uid, is_active, salary_min_vnd, salary_max_vnd, content_hash "
+        f"FROM {SILVER}"
+    )
 
 
 def build_updates(
@@ -273,11 +284,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.snapshot_date
         else datetime.now(timezone.utc).date()
     )
-    spark.sql(f"DELETE FROM {SNAPSHOT} WHERE snapshot_date = DATE '{snap.isoformat()}'")
-    spark.sql(f"""
-        INSERT INTO {SNAPSHOT}
-        SELECT DATE '{snap.isoformat()}', job_uid, is_active, salary_min_vnd, salary_max_vnd, content_hash FROM {SILVER}
-    """)
+    spark.sql(snapshot_overwrite_sql(snap))
     counts = spark.sql(
         f"SELECT source, count(*) AS n, sum(CAST(is_active AS INT)) AS active FROM {SILVER} GROUP BY source"
     ).collect()

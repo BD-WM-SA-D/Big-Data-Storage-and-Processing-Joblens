@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import csv
 import html
+import logging
 import os
 import re
 import unicodedata
+from bisect import bisect_right
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Tỷ giá dùng khi lương ghi bằng USD. Giá trị mặc định chỉ để chạy dev – truyền tỷ giá thật qua
 # biến môi trường JOBLENS_USD_VND (ghi rõ trong báo cáo ngày lấy tỷ giá).
@@ -207,6 +211,79 @@ def _baseline_place_key(text: str | None) -> str:
     return s.replace(" ", "")
 
 
+# ---------------------------------------------------------------- tỷ giá
+def _default_exchange_rates_csv() -> Path:
+    env = os.environ.get("JOBLENS_EXCHANGE_RATES_CSV")
+    if env:
+        return Path(env)
+    image_path = Path("/opt/joblens/exchange_rates.csv")
+    if image_path.exists():
+        return image_path
+    local_path = Path(__file__).resolve().parent / "exchange_rates.csv"
+    if local_path.exists():
+        return local_path
+    raise FileNotFoundError(
+        "Không thấy exchange_rates.csv – đặt JOBLENS_EXCHANGE_RATES_CSV"
+    )
+
+
+@lru_cache(maxsize=8)
+def _read_exchange_rates(path: str) -> tuple[tuple[date, float, str], ...]:
+    rows: list[tuple[date, float, str]] = []
+    with Path(path).open(encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            day = parse_date(row.get("date"))
+            try:
+                rate = float(row["usd_vnd"])
+            except (KeyError, TypeError, ValueError):
+                logger.warning("Bỏ dòng tỷ giá không đọc được: %s", row)
+                continue
+            if day is None or rate <= 0:
+                logger.warning(
+                    "Bỏ dòng tỷ giá thiếu ngày hoặc tỷ giá không hợp lệ: %s", row
+                )
+                continue
+            rows.append((day, rate, row.get("source") or ""))
+    return tuple(sorted(rows, key=lambda item: item[0]))
+
+
+def exchange_rates(csv_path: str | None = None) -> tuple[tuple[date, float, str], ...]:
+    """Bảng tỷ giá (ngày, usd_vnd, source) từ CSV fixture, đã sắp theo ngày tăng dần."""
+    path = Path(csv_path) if csv_path else _default_exchange_rates_csv()
+    return _read_exchange_rates(str(path))
+
+
+def usd_vnd_for_date(
+    posted_date: date | None, exchange_rates_csv: str | None = None
+) -> float:
+    """Tỷ giá gần nhất không muộn hơn ngày đăng; thiếu ngày hoặc thiếu tỷ giá thì fallback có warning."""
+    fallback = float(os.environ.get("JOBLENS_USD_VND", DEFAULT_USD_VND))
+    if posted_date is None:
+        logger.warning(
+            "Lương USD thiếu date_posted; dùng tỷ giá fallback %s từ JOBLENS_USD_VND/DEFAULT_USD_VND",
+            fallback,
+        )
+        return fallback
+    rates = exchange_rates(exchange_rates_csv)
+    index = bisect_right([day for day, _, _ in rates], posted_date) - 1
+    if index < 0:
+        logger.warning(
+            "Lương USD ngày %s không có tỷ giá nào <= ngày đó; dùng tỷ giá fallback %s",
+            posted_date,
+            fallback,
+        )
+        return fallback
+    day, rate, source = rates[index]
+    logger.info(
+        "Lương USD ngày %s dùng tỷ giá %s tại ngày %s (nguồn: %s)",
+        posted_date,
+        rate,
+        day,
+        source,
+    )
+    return rate
+
+
 # ---------------------------------------------------------------- lương
 _NUM = re.compile(r"\d[\d.,]*")
 _THOUSANDS = re.compile(r"^\d{1,3}(?:[.,]\d{3})+$")
@@ -228,6 +305,11 @@ _YEARLY_RAW = re.compile(r"/\s*(năm|nam|year|yr)\b")
 _YEARLY = re.compile(r"\b(moi nam|hang nam|mot nam|per year|per annum|annual|yearly)\b")
 
 
+def _salary_currency(text: str | None) -> str:
+    raw = "" if text is None else str(text)
+    return "USD" if ("usd" in fold(raw) or "$" in raw) else "VND"
+
+
 def parse_salary(
     text: str | None, usd_vnd: float | None = None, robust: bool = True
 ) -> tuple[int | None, int | None, bool, str | None]:
@@ -241,7 +323,7 @@ def parse_salary(
     f = fold(raw)
     if re.search(r"thoa thuan|canh tranh|negotiable|competitive|thuong luong", f):
         return None, None, True, None
-    currency = "USD" if ("usd" in f or "$" in raw) else "VND"
+    currency = _salary_currency(raw)
     if re.search(r"/\s*(giờ|gio|ngày|ngay|hour|day|h)\b", raw.lower()) or re.search(
         r"\b(theo gio|moi gio|per hour|per day|theo ngay)\b", f
     ):
@@ -458,16 +540,21 @@ def normalize_payload(
     usd_vnd: float | None = None,
     locations_csv: str | None = None,
     robust: bool = True,
+    exchange_rates_csv: str | None = None,
 ) -> dict:
     """payload job_posting.v1 → các cột chuẩn hóa của silver.job_postings (phần lấy từ payload).
 
     robust=True (mặc định, pipeline thật): làm sạch chuỗi, lương năm, so khớp tỉnh gần đúng, loại ngoại lai.
     robust=False: cách làm trước thí nghiệm nhiễu – chỉ dùng để đo so sánh (docs/thi-nghiem-nhieu.md).
+    Lương USD dùng usd_vnd truyền vào nếu có; nếu không thì tra tỷ giá theo date_posted trong exchange_rates_csv.
     """
     p = payload or {}
-    smin, smax, negotiable, currency = parse_salary(
-        p.get("salary_text"), usd_vnd, robust
-    )
+    posted_date = parse_date(p.get("date_posted"))
+    salary_text = clean_text(p.get("salary_text")) if robust else p.get("salary_text")
+    rate = usd_vnd
+    if rate is None and salary_text and _salary_currency(salary_text) == "USD":
+        rate = usd_vnd_for_date(posted_date, exchange_rates_csv)
+    smin, smax, negotiable, currency = parse_salary(p.get("salary_text"), rate, robust)
     emin, emax = parse_experience(p.get("experience_text"), robust)
     title = (
         clean_text(p.get("title")) if robust else (p.get("title") or "").strip()
@@ -493,7 +580,7 @@ def normalize_payload(
         ),
         "category_source": p.get("category"),
         "deadline": parse_date(p.get("deadline")),
-        "posted_date": parse_date(p.get("date_posted")),
+        "posted_date": posted_date,
         "skill_tags": skills,
         "description": p.get("description"),
         "requirements": p.get("requirements"),

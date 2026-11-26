@@ -34,6 +34,8 @@ RUN set -eux; cd /opt/spark/jars; \
 # Mã job + bảng ánh xạ địa điểm (nguồn duy nhất: dbt/seeds/locations_2025.csv)
 COPY --chown=spark:spark spark-jobs/*.py /opt/joblens/
 COPY --chown=spark:spark dbt/seeds/locations_2025.csv /opt/joblens/locations_2025.csv
+COPY --chown=spark:spark spark-jobs/exchange_rates.csv /opt/joblens/exchange_rates.csv
 ENV PYTHONPATH=/opt/joblens \
-    JOBLENS_LOCATIONS_CSV=/opt/joblens/locations_2025.csv
+    JOBLENS_LOCATIONS_CSV=/opt/joblens/locations_2025.csv \
+    JOBLENS_EXCHANGE_RATES_CSV=/opt/joblens/exchange_rates.csv
 USER spark

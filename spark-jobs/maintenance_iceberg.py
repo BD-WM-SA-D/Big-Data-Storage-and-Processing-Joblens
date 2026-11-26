@@ -26,10 +26,22 @@ DEFAULT_TABLES = [
     "bronze.jobs_raw",
     "silver.job_postings",
     "silver.job_postings_snapshot",
+    "gold.mart_salary_role_region",
+    "gold.dim_location",
 ]
+GOLD_TABLES = frozenset({"gold.mart_salary_role_region", "gold.dim_location"})
+GOLD_EXPIRE_DAYS = 1
+GOLD_RETAIN_LAST = 24
 TARGET_FILE_BYTES = 128 * 1024 * 1024
 
 log = logging.getLogger("maintenance_iceberg")
+
+
+def retention_for(table: str, expire_days: int, retain_last: int) -> tuple[int, int]:
+    """Gold được dựng lại mỗi giờ nên dùng chính sách riêng, không theo tham số chung."""
+    if table in GOLD_TABLES:
+        return GOLD_EXPIRE_DAYS, GOLD_RETAIN_LAST
+    return expire_days, retain_last
 
 
 def maintenance_sql(
@@ -72,15 +84,18 @@ def main(argv: list[str] | None = None) -> None:
     now = datetime.now(timezone.utc)
     existing = {
         f"{r.namespace}.{r.tableName}"
-        for ns in ("bronze", "silver")
+        for ns in ("bronze", "silver", "gold")
         for r in spark.sql(f"SHOW TABLES IN {CATALOG}.{ns}").collect()
     }
     for table in args.tables:
         if table not in existing:
             log.warning("bỏ qua %s: bảng chưa tồn tại", table)
             continue
+        expire_days, retain_last = retention_for(
+            table, args.expire_days, args.retain_last
+        )
         files_before = spark.table(f"{CATALOG}.{table}.files").count()
-        for sql in maintenance_sql(table, now, args.expire_days, args.retain_last):
+        for sql in maintenance_sql(table, now, expire_days, retain_last):
             result = spark.sql(sql).collect()
             log.info("%s → %s", sql.split("(")[0], [r.asDict() for r in result])
         files_after = spark.table(f"{CATALOG}.{table}.files").count()
