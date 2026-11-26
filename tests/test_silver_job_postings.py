@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -82,6 +82,14 @@ def test_snapshot_ddl_matches_contract():
     for c in contract["columns"]:
         assert f" {c['name']} " in flat, c["name"]
     assert "PARTITIONED BY (days(snapshot_date))" in S.DDL_SNAPSHOT
+
+
+def test_snapshot_overwrite_targets_one_partition_without_delete():
+    sql = S.snapshot_overwrite_sql(date(2026, 11, 25))
+    assert "DELETE" not in sql and "INSERT OVERWRITE" in sql
+    assert "DATE '2026-11-25' AS snapshot_date" in sql
+    assert "PARTITION (" not in sql
+    assert sql.endswith(f"FROM {S.SILVER}")
 
 
 def test_job_uid_matches_contracts_package(spark):

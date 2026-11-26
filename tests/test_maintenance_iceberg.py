@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -39,7 +40,54 @@ def test_rejects_bad_table_names(bad):
 
 
 def test_default_tables_are_ours():
-    # repo này chỉ ghi bronze.*, silver.job_postings* (AGENTS.md) – không bảo trì bảng của repo mining
-    assert all(
-        t.startswith(("bronze.", "silver.job_postings")) for t in M.DEFAULT_TABLES
+    assert set(M.DEFAULT_TABLES) == {
+        "bronze.jobs_raw",
+        "silver.job_postings",
+        "silver.job_postings_snapshot",
+        "gold.mart_salary_role_region",
+        "gold.dim_location",
+    }
+    mining_tables = {
+        "silver.job_skills",
+        "silver.job_dedup",
+        "silver.review_aspects",
+        "silver.reco_scores",
+    }
+    assert mining_tables.isdisjoint(M.DEFAULT_TABLES)
+
+
+@pytest.mark.parametrize("table", ["gold.mart_salary_role_region", "gold.dim_location"])
+def test_gold_retention_overrides_cli(table):
+    assert M.retention_for(table, 7, 10) == (1, 24)
+    sql = M.maintenance_sql(table, NOW, *M.retention_for(table, 7, 10))
+    assert "older_than => TIMESTAMP '2026-10-19 12:00:00'" in sql[2]
+    assert "retain_last => 24" in sql[2]
+
+
+def test_non_gold_keeps_cli_retention():
+    assert M.retention_for("bronze.jobs_raw", 7, 10) == (7, 10)
+
+
+def test_main_lists_gold_namespace(monkeypatch):
+    queries = []
+
+    class FakeSpark:
+        def sql(self, query):
+            queries.append(query)
+            rows = (
+                [SimpleNamespace(namespace="gold", tableName="dim_location")]
+                if query == "SHOW TABLES IN lake.gold"
+                else []
+            )
+            return SimpleNamespace(collect=lambda: rows)
+
+        def table(self, name):
+            return SimpleNamespace(count=lambda: 0)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "bronze_jobs",
+        SimpleNamespace(build_session=lambda name: FakeSpark()),
     )
+    M.main(["--tables", "gold.dim_location"])
+    assert "SHOW TABLES IN lake.gold" in queries

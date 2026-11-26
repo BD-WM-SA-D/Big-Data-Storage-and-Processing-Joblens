@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 import sys
 from datetime import date
 from pathlib import Path
@@ -356,3 +357,98 @@ def test_experience_cap():
     assert N.parse_experience("99 năm") == (None, None)
     assert N.parse_experience("99 năm", robust=False) == (99.0, 99.0)
     assert N.parse_experience("3 năm") == (3.0, 3.0)
+
+
+def test_exchange_rates_fixture_table():
+    rows = N.exchange_rates(str(ROOT / "spark-jobs" / "exchange_rates.csv"))
+    assert len(rows) == 4
+    assert rows[1][0] == date(2026, 9, 15) and rows[1][1] == 25_400
+    assert all(source == "fixture-joblens-khong-crawl" for _, _, source in rows)
+
+
+def test_normalize_payload_uses_rate_for_posted_date():
+    out = N.normalize_payload(
+        {"salary_text": "1,000 - 2,000 USD", "date_posted": "2026-09-20"}
+    )
+    assert (out["salary_min_vnd"], out["salary_max_vnd"]) == (
+        25_400_000,
+        50_800_000,
+    )
+    assert out["salary_currency_original"] == "USD"
+    assert out["posted_date"] == date(2026, 9, 20)
+
+
+def test_normalize_payload_explicit_rate_wins_over_posted_date():
+    out = N.normalize_payload(
+        {"salary_text": "1,000 - 2,000 USD", "date_posted": "2026-09-20"},
+        usd_vnd=26_000,
+    )
+    assert (out["salary_min_vnd"], out["salary_max_vnd"]) == (26 * M, 52 * M)
+
+
+def test_normalize_payload_missing_rate_falls_back_with_warning(monkeypatch, caplog):
+    monkeypatch.setenv("JOBLENS_USD_VND", "27000")
+    with caplog.at_level(logging.WARNING, logger=N.__name__):
+        out = N.normalize_payload(
+            {"salary_text": "1,000 - 2,000 USD", "date_posted": "2026-08-01"}
+        )
+    assert (out["salary_min_vnd"], out["salary_max_vnd"]) == (27 * M, 54 * M)
+    assert "2026-08-01" in caplog.text and "fallback" in caplog.text
+
+
+def test_normalize_payload_no_posted_date_falls_back_with_warning(monkeypatch, caplog):
+    monkeypatch.delenv("JOBLENS_USD_VND", raising=False)
+    with caplog.at_level(logging.WARNING, logger=N.__name__):
+        out = N.normalize_payload({"salary_text": "$1500"})
+    assert (out["salary_min_vnd"], out["salary_max_vnd"]) == (39 * M, 39 * M)
+    assert out["posted_date"] is None
+    assert "date_posted" in caplog.text and "fallback" in caplog.text
+
+
+GOLDEN_SET = [
+    pytest.param(
+        "location",
+        ["hải châu"],
+        [],
+        "cố ý giữ null: quận của Đà Nẵng, không đoán sang Lai Châu",
+        id="dia-diem-hai-chau",
+    ),
+    pytest.param(
+        "location",
+        ["văn giang"],
+        [],
+        "cố ý giữ null: huyện thật, không đoán sang An Giang",
+        id="dia-diem-van-giang",
+    ),
+    pytest.param(
+        "salary",
+        "0.0 triệu",
+        (None, None, True, None),
+        "cố ý coi là thỏa thuận, không phải lương 0",
+        id="luong-0-0-trieu",
+    ),
+    pytest.param(
+        "salary",
+        "200 - 500 triệu",
+        (None, None, False, "VND"),
+        "cố ý loại cả khoảng vì đầu trên vượt ngưỡng 300 triệu/tháng",
+        id="luong-200-500-trieu",
+    ),
+    pytest.param(
+        "location",
+        ["ho chi minh city"],
+        ["79"],
+        "sửa đúng nhờ bỏ hậu tố City",
+        id="dia-diem-ho-chi-minh-city",
+    ),
+]
+
+
+@pytest.mark.parametrize("field,input_value,expected,reason", GOLDEN_SET)
+def test_golden_set(field, input_value, expected, reason):
+    actual = (
+        N.location_codes(input_value)
+        if field == "location"
+        else N.parse_salary(input_value)
+    )
+    assert actual == expected, reason
