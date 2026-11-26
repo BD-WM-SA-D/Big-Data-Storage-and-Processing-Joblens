@@ -44,8 +44,10 @@ wait_trino || { echo "Trino chưa sẵn sàng sau 180 giây" >&2; exit 1; }
 
 run_dbt() {
   cd "${ROOT}/dbt"
+  unset VIRTUAL_ENV
   DBT_TRINO_PORT="$PORT" DBT_THREADS="$THREADS" DBT_SEND_ANONYMOUS_USAGE_STATS=false \
-    uv run --project "$ROOT" dbt "$@" --project-dir . --profiles-dir .
+    uv run --project "$ROOT" python -c 'import sys; sys.argv[0] = "dbt"; from dbt.cli.main import cli; cli()' "$@" \
+      --project-dir . --profiles-dir .
 }
 
 if ! run_dbt "$@" 2>&1 | tee "$LOG"; then
