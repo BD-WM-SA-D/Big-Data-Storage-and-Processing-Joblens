@@ -8,7 +8,7 @@ Dựng tất cả một lần (máy mới, GitHub Codespaces – [`docs/cloud-co
 |---|---|---|---|
 | −1 | `bash deploy/k3d/create-cluster.sh` (máy 8 GB: `JOBLENS_PROFILE=lite …`) | – | Cụm k3d `joblens` (chỉ khi chưa có cụm) |
 | 0 | `cp .env.example .env && uv sync` | – | Biến môi trường, Python + pyspark (để chạy `spark-submit`) |
-| 1 | `bash deploy/kafka/install.sh` | `ingest` | Strimzi 1.2.0, Kafka 4.3.1 KRaft 1 node, 7 topic (`deploy/kafka/topics.yaml`) |
+| 1 | `bash deploy/kafka/install.sh` | `ingest` | Strimzi 1.2.0, Kafka 4.3.1 KRaft 1 node, 8 topic (`deploy/kafka/topics.yaml`) |
 | 2 | `bash deploy/storage/install.sh` | `lakehouse` | SeaweedFS 4.48 (S3, bucket `joblens`), Lakekeeper v0.13.3 + Postgres 17.6, warehouse `joblens` |
 | 2b | `bash deploy/mongodb/install.sh` | `serving` | MongoDB 8.0 (NoSQL serving): user `joblens`, Secret `joblens-mongo` cho Spark và Trino |
 | 3 | `bash deploy/trino/install.sh` | `serving` | Trino 483 (một node: coordinator kiêm worker – vừa máy 16 GB), catalog `iceberg` |
@@ -17,14 +17,14 @@ Dựng tất cả một lần (máy mới, GitHub Codespaces – [`docs/cloud-co
 | (demo) | `bash deploy/data/replay-vietjobs.sh 3000 50` | `compute` | Pod producer Python gửi tin VietJobs vào `jobs.raw.vietjobs.v1` cho job streaming |
 | 6 | `DRIVER_MEMORY=2g bash deploy/spark/submit.sh vietjobs --sink bronze` | `compute` | 48k tin VietJobs vào `bronze.jobs_raw` (đường A – batch) |
 | 7 | `bash deploy/spark/submit.sh silver_job_postings` | `compute` | `bronze.jobs_raw` → `silver.job_postings` (MERGE) + `silver.job_postings_snapshot` |
-| 8 | `bash scripts/dbt.sh build` | `serving` (Trino) | Seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 12 test dữ liệu |
+| 8 | `bash scripts/dbt.sh source freshness && bash scripts/dbt.sh build` | `serving` (Trino) | Freshness theo `updated_ts`; seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 15 test dữ liệu |
 | 9 | `bash deploy/monitoring/install.sh` | `monitoring` | Grafana 13.2.4 + plugin Trino 1.4.1 + dashboard `dashboards/joblens-demo.json`; Kafka UI v1.5.0 (chỉ đọc) |
-| 10 | `bash deploy/airflow/install.sh` | `orchestration` | Postgres 17.6 + Airflow 3.3.2 (chart 1.22.0, LocalExecutor), DAG `joblens_pipeline`: silver → GX → dbt gold + bảo trì Iceberg; build image `joblens/dbt` |
+| 10 | `bash deploy/airflow/install.sh` | `orchestration` | Postgres 17.6 + Airflow 3.3.2 (chart 1.22.0, LocalExecutor), DAG `joblens_pipeline` 6 task: silver → GX → {dbt gold, analytics} → maintenance → gold freshness; build image `joblens/dbt` |
 | 11 | `bash deploy/data-tools/install.sh` | `serving` | SQLPad 7.5.7 (SQL qua Trino trên trình duyệt, 8 câu mẫu) + mongo-express 1.0.2 (sửa document MongoDB) – tùy chọn, cho demo sửa dữ liệu không cần terminal |
 
-Kịch bản demo môn học: [`docs/demo.md`](../docs/demo.md). Mở mọi giao diện web: `bash scripts/demo-ui.sh`. Truy vấn nhanh: `bash scripts/trino.sh "SELECT …"`.
+Kịch bản demo môn học: [`docs/demo.md`](../docs/demo.md). Hướng dẫn chạy từ đầu đến cuối: [`HUONG_DAN_CHAY_CHI_TIET.md`](../HUONG_DAN_CHAY_CHI_TIET.md). Mở mọi giao diện web: `bash scripts/demo-ui.sh`. Truy vấn nhanh: `bash scripts/trino.sh "SELECT …"`.
 
-Sau bước 4 thành công, thêm một dòng vào [`compat.md`](compat.md) (quy tắc của repo).
+Sau khi chạy đủ một lượt: `bash deploy/smoke-e2e.sh` → `bash deploy/spark/submit.sh silver_job_postings` → `bash deploy/spark/submit.sh gx_silver` → `bash scripts/dbt.sh source freshness && bash scripts/dbt.sh build` → `bash deploy/spark/submit.sh gold_freshness_check`, rồi thêm một dòng vào [`compat.md`](compat.md) (quy tắc của repo). Bước silver bắt buộc sau smoke để cập nhật `updated_ts`; nếu bỏ qua, GX/dbt freshness báo STALE dù bronze đã có tin mới. Nếu đổi luật chuẩn hóa, chạy `bash deploy/spark/submit.sh silver_job_postings --full` trước GX/dbt. Chạy tuần tự; không chạy nhiều truy vấn Trino đồng thời.
 
 ## Địa chỉ dịch vụ trong cụm
 
@@ -56,7 +56,8 @@ Từ máy mình: `bash scripts/demo-ui.sh` mở cùng lúc Grafana (3000), Kafka
 - Warehouse tắt STS và remote signing: Spark và Trino dùng khóa S3 tĩnh từ Secret. Bật STS khi cần cấp quyền theo bảng.
 - Spark chạy bằng `spark-submit --master k8s://` (cluster mode), image `joblens/spark-jobs:<version>-<gitsha>` build từ `spark-jobs/Dockerfile` và nạp vào k3d bằng `k3d image import` – không cần registry.
 - Airflow chạy LocalExecutor; mỗi task của DAG là một pod trong `compute` (KubernetesPodOperator). Task Spark chạy client mode – pod task là driver, tạo pod executor bằng SA `spark` – nên log Spark hiện thẳng trên Airflow. DAG nạp từ ConfigMap `joblens-dags`; tag image là Airflow Variable `joblens_spark_image`, `joblens_dbt_image` khai báo qua Helm values (`deploy/airflow/install.sh`).
-- `spark-jobs/gx_silver.py` (task `gx_validate_silver`): Great Expectations 1.23 trên Spark – khóa, danh mục, khoảng lương, 34 mã tỉnh, độ phủ địa điểm ≥ 90%, lương ≥ 50%. Hỏng thì dbt không chạy (gold giữ bản cũ). Kết quả JSON ở `s3://joblens/quality/gx/silver_job_postings/`.
+- `spark-jobs/gx_silver.py` (task `gx_validate_silver`): Great Expectations 1.23 trên Spark – 15 kỳ vọng cũ (khóa, danh mục, khoảng lương, 34 mã tỉnh, độ phủ địa điểm ≥ 90%, lương ≥ 50%) + 1 freshness `now - max(updated_ts)` với warn 90 / error 180 phút. Hỏng thì dbt không chạy (gold giữ bản cũ). Kết quả JSON ở `s3://joblens/quality/gx/silver_job_postings/`.
+- `spark-jobs/gold_freshness_check.py` (task cuối `gold_freshness_check`): đọc `.history`/`.snapshots` của `gold.mart_salary_role_region` qua Iceberg, đối chiếu `max(month)`; quá 180 phút thì DAG đỏ. Ngưỡng là chính sách, không phải số đo.
 - MongoDB là tầng phục vụ NoSQL: `stream_province_windows.py` (streaming có state, watermark) upsert `province_windows`; `analytics_spark.py` (task `spark_analytics`) ghi `analytics_*`. Collection nội bộ của repo này nên chưa có contract ở `joblens`; repo khác cần đọc thì thêm contract trước.
 - `spark-jobs/maintenance_iceberg.py` (task `iceberg_maintenance`): `rewrite_data_files` gộp file nhỏ do streaming, `rewrite_manifests`, `expire_snapshots` (giữ 10 snapshot gần nhất). Không chạy `remove_orphan_files` khi streaming đang ghi.
 - Checkpoint của job streaming nằm trên PVC `compute/spark-checkpoints`. Xóa PVC thì job đọc lại Kafka từ đầu (bronze sẽ có bản ghi lặp).

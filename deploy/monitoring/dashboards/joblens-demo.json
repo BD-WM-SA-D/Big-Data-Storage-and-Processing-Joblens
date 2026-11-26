@@ -7,9 +7,9 @@
   ],
   "timezone": "browser",
   "editable": true,
-  "refresh": "5s",
+  "refresh": "30s",
   "schemaVersion": 41,
-  "version": 3,
+  "version": 4,
   "time": {
     "from": "now-30m",
     "to": "now"
@@ -36,7 +36,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**JobLens – nền tảng Big Data (IT4931).** Dữ liệu: Kafka → Spark Structured Streaming → Iceberg bronze → Spark MERGE silver → dbt gold, truy vấn bằng Trino. Mọi ô đọc trực tiếp từ bảng Iceberg qua Trino, tự làm mới 5 giây."
+        "content": "**JobLens – nền tảng Big Data (IT4931).** Dữ liệu: Kafka → Spark Structured Streaming → Iceberg bronze → Spark MERGE silver → dbt gold, truy vấn bằng Trino. Mọi ô đọc trực tiếp từ bảng Iceberg qua Trino, tự làm mới 30 giây."
       }
     },
     {
@@ -451,7 +451,7 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT d.name AS tinh_thanh, m.job_count AS so_tin\nFROM iceberg.gold.mart_salary_role_region m JOIN iceberg.gold.dim_location d USING (location_code)\nWHERE m.category_source = 'ALL' AND m.level_code = 'ALL'\nORDER BY m.job_count DESC LIMIT 15",
+          "rawSQL": "SELECT d.name AS tinh_thanh, m.job_count AS so_tin\nFROM iceberg.gold.mart_salary_role_region m JOIN iceberg.gold.dim_location d USING (location_code)\nWHERE m.category_source = 'ALL' AND m.level_code = 'ALL' AND m.month = (SELECT max(month) FROM iceberg.gold.mart_salary_role_region)\nORDER BY m.job_count DESC LIMIT 15",
           "format": 1
         }
       ],
@@ -503,7 +503,7 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT level_code AS cap_bac, salary_median_vnd / 1e6 AS trung_vi_trieu\nFROM iceberg.gold.mart_salary_role_region\nWHERE category_source = 'ALL' AND location_code = 'ALL' AND level_code NOT IN ('ALL', 'unknown')\nORDER BY salary_median_vnd DESC NULLS LAST",
+          "rawSQL": "SELECT level_code AS cap_bac, salary_median_vnd / 1e6 AS trung_vi_trieu\nFROM iceberg.gold.mart_salary_role_region\nWHERE category_source = 'ALL' AND location_code = 'ALL' AND level_code NOT IN ('ALL', 'unknown') AND month = (SELECT max(month) FROM iceberg.gold.mart_salary_role_region)\nORDER BY salary_median_vnd DESC NULLS LAST",
           "format": 1
         }
       ],
@@ -555,7 +555,7 @@
             "type": "trino-datasource",
             "uid": "trino"
           },
-          "rawSQL": "SELECT d.name AS tinh_thanh, m.salary_median_vnd / 1e6 AS trung_vi_trieu\nFROM iceberg.gold.mart_salary_role_region m JOIN iceberg.gold.dim_location d USING (location_code)\nWHERE m.category_source = 'ALL' AND m.level_code = 'ALL' AND m.job_count >= 200\nORDER BY m.salary_median_vnd DESC NULLS LAST",
+          "rawSQL": "SELECT d.name AS tinh_thanh, m.salary_median_vnd / 1e6 AS trung_vi_trieu\nFROM iceberg.gold.mart_salary_role_region m JOIN iceberg.gold.dim_location d USING (location_code)\nWHERE m.category_source = 'ALL' AND m.level_code = 'ALL' AND m.job_count >= 200 AND m.month = (SELECT max(month) FROM iceberg.gold.mart_salary_role_region)\nORDER BY m.salary_median_vnd DESC NULLS LAST",
           "format": 1
         }
       ],
@@ -1057,6 +1057,68 @@
       },
       "options": {
         "showHeader": true
+      }
+    },
+    {
+      "id": 110,
+      "type": "stat",
+      "title": "Offset gap",
+      "description": "max(gap) trong 30 phút gần nhất, lấy từ iceberg.bronze.kafka_offset_audit. Cần chạy bronze_jobs sau nâng cấp để bảng được tạo và có dữ liệu; nếu chưa có bảng, ô này báo lỗi truy vấn.",
+      "datasource": {
+        "type": "trino-datasource",
+        "uid": "trino"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "trino-datasource",
+            "uid": "trino"
+          },
+          "rawSQL": "SELECT max(gap) AS offset_gap\nFROM iceberg.bronze.kafka_offset_audit\nWHERE measured_at >= current_timestamp - INTERVAL '30' MINUTE",
+          "format": 1
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
       }
     }
   ],

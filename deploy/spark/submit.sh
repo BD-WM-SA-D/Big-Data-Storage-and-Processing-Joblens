@@ -82,7 +82,7 @@ spec:
             - {name: JOBLENS_CATALOG_URI, value: "${CATALOG_URI}"}
             - {name: JOBLENS_CATALOG_WAREHOUSE, value: "${JOBLENS_CATALOG_WAREHOUSE:-joblens}"}
             - {name: JOBLENS_S3_ENDPOINT, value: "${S3_ENDPOINT}"}
-            - {name: JOBLENS_CHECKPOINT_DIR, value: /checkpoints}
+            - {name: JOBLENS_CHECKPOINT_DIR, value: "${JOBLENS_CHECKPOINT_DIR:-/checkpoints}"}
             - {name: JOBLENS_USD_VND, value: "${JOBLENS_USD_VND:-26000}"}
           envFrom:
             - secretRef: {name: joblens-s3}
@@ -121,7 +121,7 @@ for side in driverEnv executorEnv; do
             --conf "${prefix}.JOBLENS_CATALOG_WAREHOUSE=${JOBLENS_CATALOG_WAREHOUSE:-joblens}"
             --conf "${prefix}.JOBLENS_S3_ENDPOINT=${S3_ENDPOINT}"
             --conf "${prefix}.JOBLENS_S3_REGION=${JOBLENS_S3_REGION}"
-            --conf "${prefix}.JOBLENS_CHECKPOINT_DIR=/checkpoints"
+            --conf "${prefix}.JOBLENS_CHECKPOINT_DIR=${JOBLENS_CHECKPOINT_DIR:-/checkpoints}"
             --conf "${prefix}.JOBLENS_USD_VND=${JOBLENS_USD_VND:-26000}")
 done
 # MongoDB (deploy/mongodb) – chỉ gắn khi Secret có, để job không cần MongoDB vẫn chạy khi chưa cài
