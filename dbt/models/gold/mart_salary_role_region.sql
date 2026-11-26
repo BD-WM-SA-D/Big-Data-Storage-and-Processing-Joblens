@@ -5,7 +5,11 @@
 -- * Tin nhiều địa điểm được tách thành nhiều dòng; dòng 'ALL' đếm distinct nên không đếm trùng.
 -- * Trung điểm lương: (min+max)/2; chỉ có một cận thì dùng cận đó. Phân vị null khi có lương < 5 tin.
 -- * Bỏ tin synthetic (fixtures). Tin VietJobs giữ lại – tháng của chúng là tháng nạp (docs/13).
-{{ config(properties={"partitioning": "ARRAY['month']"}) }}
+{{ config(
+    unique_key=['month', 'category_source', 'level_code', 'location_code'],
+    incremental_strategy='merge',
+    properties={"partitioning": "ARRAY['month']"}
+) }}
 
 with jobs as (
     select
@@ -23,9 +27,18 @@ with jobs as (
     where source <> 'synthetic'
 ),
 
+recent_jobs as (
+    select *
+    from jobs
+    {% if is_incremental() %}
+    where month >= date_add('month', -1, date_trunc('month', current_date))
+      and month < date_add('month', 1, date_trunc('month', current_date))
+    {% endif %}
+),
+
 exploded as (
     select j.*, loc as location_code
-    from jobs j
+    from recent_jobs j
     cross join unnest(j.locs) as t (loc)
 ),
 

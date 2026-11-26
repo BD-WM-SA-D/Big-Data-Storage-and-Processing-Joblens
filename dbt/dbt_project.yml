@@ -25,4 +25,7 @@ models:
   joblens_gold:
     gold:
       +schema: gold
-      +materialized: table
+      dim_location:
+        +materialized: table
+      mart_salary_role_region:
+        +materialized: incremental

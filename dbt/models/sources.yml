@@ -7,7 +7,15 @@ sources:
     description: Bảng silver do spark-jobs/silver_job_postings.py ghi (contract joblens).
     tables:
       - name: job_postings
-        description: Tin đã chuẩn hóa – joblens/schemas/tables/silver/job_postings.yaml 0.2.0
+        description: Tin đã chuẩn hóa – joblens/schemas/tables/silver/job_postings.yaml 0.2.0; freshness dùng ngưỡng chính sách 90/180 phút, không phải số đo
+        loaded_at_field: updated_ts
+        freshness:
+          warn_after:
+            count: 90
+            period: minute
+          error_after:
+            count: 180
+            period: minute
         columns:
           - name: job_uid
             data_tests: [not_null, unique]
