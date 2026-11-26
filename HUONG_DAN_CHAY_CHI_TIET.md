@@ -1,6 +1,6 @@
 # HƯỚNG DẪN CHẠY CHI TIẾT TOÀN BỘ DỰ ÁN JOBLENS (IT4931)
 
-Tài liệu này hướng dẫn **dựng, vận hành, demo và kiểm tra** toàn bộ nền tảng Big Data JobLens trên k3d/Kubernetes, bám theo code hiện tại của repo (cập nhật theo commit mới nhất trên `main`).
+Tài liệu này hướng dẫn **dựng, vận hành, demo và kiểm tra** toàn bộ nền tảng Big Data JobLens trên k3d/Kubernetes, bám theo code hiện tại trong working tree (luồng đã kiểm chứng ngày 2026-11-25, xem [`deploy/compat.md`](deploy/compat.md)).
 
 > **Tham khảo chính:** [`deploy/README.md`](deploy/README.md), [`docs/chay-demo.md`](docs/chay-demo.md), [`docs/demo.md`](docs/demo.md), [`docs/tap-duot-demo.md`](docs/tap-duot-demo.md), [`docs/kien-truc.md`](docs/kien-truc.md)
 
@@ -40,13 +40,22 @@ cd Big-Data-Storage-and-Processing-Joblens
 cp .env.example .env
 uv sync
 source .venv/bin/activate
-export JOBLENS_PROFILE=full                              # máy 8 GB: lite
+export JOBLENS_PROFILE=full                              # khuyến nghị; máy 8 GB có thể dùng lite nhưng dbt dễ OOMKilled
 
 bash scripts/bootstrap-all.sh                            # ~40–60 phút lần đầu
-bash deploy/smoke-e2e.sh                                 # kiểm tra toàn tuyến
+bash deploy/smoke-e2e.sh                                 # kiểm tra toàn tuyến Kafka → Spark → Iceberg → Trino
+bash deploy/spark/submit.sh silver_job_postings          # bronze → silver; bắt buộc trước GX/freshness
+bash deploy/spark/submit.sh gx_silver                    # 16 kỳ vọng, exit 0 mới được làm gold
+JOBLENS_PROFILE=full bash scripts/dbt.sh source freshness
+JOBLENS_PROFILE=full bash scripts/dbt.sh build            # 15 test dbt
+bash deploy/spark/submit.sh gold_freshness_check          # đọc metadata Iceberg, warn 90 / error 180 phút
+uv run pytest -q
+uv run pre-commit run --all-files
 bash deploy/data-tools/install.sh                        # in lại mật khẩu SQLPad/Mongo Express (đã cài ở bước 11)
 bash scripts/demo-ui.sh                                  # giữ terminal mở
 ```
+
+Chi tiết từng bước và cách xử lý khi đổi luật chuẩn hóa ở [mục 4](#4-dựng-cụm-từ-đầu-bootstrap-toàn-bộ) và [mục 8](#8-nạp-dữ-liệu-và-chạy-pipeline).
 
 Sau đó mở http://localhost:8082 (Airflow), đăng nhập `admin` với mật khẩu:
 
@@ -213,6 +222,8 @@ source ~/.bashrc
 
 > Đổi profile sau khi đã tạo cụm phải **xóa cụm** (`k3d cluster delete joblens`) – mất dữ liệu trong cụm.
 
+> `lite` tiết kiệm RAM nhưng Trino một node từng bị `OOMKilled` (exit `137`) khi chạy dbt gold. Với máy 8 GB, nếu bắt buộc dùng `lite`, tăng limits Trino lên `>=2304Mi` hoặc chạy riêng `JOBLENS_PROFILE=full` ở bước dbt; không chạy nhiều truy vấn Trino đồng thời.
+
 ---
 
 ## 4. Dựng cụm từ đầu (Bootstrap toàn bộ)
@@ -226,20 +237,20 @@ bash scripts/bootstrap-all.sh
 
 Script chạy tuần tự (idempotent – chạy lại an toàn):
 
-| Bước | Nội dung                                                                                 |
-| ------ | ----------------------------------------------------------------------------------------- |
-| 0      | Tạo cụm k3d `joblens` theo profile + tạo `.env`                                    |
-| 1      | Strimzi 1.2.0 + Kafka 4.3.1 KRaft + 8 topic                                               |
-| 2      | SeaweedFS 4.48.0 (S3) + Lakekeeper 0.12.0 + Postgres                                      |
-| 3      | MongoDB 8.0 + user `joblens`                                                            |
-| 4      | Trino 483 (catalog `iceberg`, `mongodb`)                                              |
-| 5      | Tải VietJobs (Hugging Face) lên `s3://joblens/raw/vietjobs/`                          |
-| 6      | Nạp VietJobs vào `bronze.jobs_raw` (batch)                                            |
-| 7      | `bronze → silver.job_postings` (MERGE) + snapshot                                      |
-| 8      | dbt build: seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + tests |
-| 9      | Grafana 13.2.4 + plugin Trino + dashboard; Kafka UI (full)                                |
-| 10     | Postgres + Airflow 3.3.2 (chart 1.22.0) + DAG `joblens_pipeline`                        |
-| 11     | SQLPad 7.5.7 + mongo-express 1.0.2 (sửa dữ liệu trên trình duyệt)                   |
+| Bước | Nội dung                                                                                                |
+| ------ | -------------------------------------------------------------------------------------------------------- |
+| 0      | Tạo cụm k3d `joblens` theo profile + tạo `.env`                                                   |
+| 1      | Strimzi 1.2.0 + Kafka 4.3.1 KRaft + 8 topic                                                              |
+| 2      | SeaweedFS 4.48.0 (S3) + Lakekeeper 0.12.0 + Postgres                                                     |
+| 3      | MongoDB 8.0 + user `joblens`                                                                           |
+| 4      | Trino 483 (catalog `iceberg`, `mongodb`)                                                             |
+| 5      | Tải VietJobs (Hugging Face) lên `s3://joblens/raw/vietjobs/`                                         |
+| 6      | Nạp VietJobs vào `bronze.jobs_raw` (batch)                                                           |
+| 7      | `bronze → silver.job_postings` (MERGE) + snapshot                                                     |
+| 8      | dbt build: seed 34 tỉnh, `gold.dim_location`, `gold.mart_salary_role_region` + 15 test              |
+| 9      | Grafana 13.2.4 + plugin Trino + dashboard; Kafka UI (full)                                               |
+| 10     | Postgres + Airflow 3.3.2 (chart 1.22.0) + DAG `joblens_pipeline` 6 task (có `gold_freshness_check`) |
+| 11     | SQLPad 7.5.7 + mongo-express 1.0.2 (sửa dữ liệu trên trình duyệt)                                  |
 
 **Thời gian:** ~40–60 phút lần đầu (tải image, tải VietJobs, build image Spark/dbt, cài Airflow và SQLPad).
 
@@ -259,7 +270,18 @@ Khi hoàn thành, bạn sẽ thấy:
 ########## Xong ##########
 ```
 
-> **Lưu ý:** `bootstrap-all.sh` **không** chạy smoke test. Sau khi xong, chạy `bash deploy/smoke-e2e.sh` (mục 5, bước 4) để kiểm tra toàn tuyến Kafka → Spark → Iceberg → Trino, rồi ghi một dòng vào [`deploy/compat.md`](deploy/compat.md).
+> **Lưu ý:** `bootstrap-all.sh` **không** chạy smoke test, GX, `dbt source freshness` và `gold_freshness_check`. Sau khi xong, chạy tuần tự để chốt một lượt end-to-end rồi ghi một dòng vào [`deploy/compat.md`](deploy/compat.md):
+>
+> ```bash
+> bash deploy/smoke-e2e.sh
+> bash deploy/spark/submit.sh silver_job_postings
+> bash deploy/spark/submit.sh gx_silver
+> JOBLENS_PROFILE=full bash scripts/dbt.sh source freshness
+> JOBLENS_PROFILE=full bash scripts/dbt.sh build
+> bash deploy/spark/submit.sh gold_freshness_check
+> ```
+>
+> Nếu vừa đổi `spark-jobs/normalize.py` hoặc muốn xử lý lại mọi offset, chèn `bash deploy/spark/submit.sh silver_job_postings --full` trước lượt GX/dbt. Không chạy song song các lệnh trên (Trino một node dễ OOMKilled).
 
 ### Nếu Airflow lỗi khi tải Helm chart
 
@@ -439,24 +461,33 @@ kubectl exec -n orchestration statefulset/airflow-scheduler -c scheduler -- \
 DAG chạy theo thứ tự:
 
 ```text
-silver_job_postings → gx_validate_silver → ┬→ dbt_build_gold
-                                            └→ spark_analytics → iceberg_maintenance
+silver_job_postings → gx_validate_silver → ┬→ dbt_build_gold ─────────────────┐
+                                             └→ spark_analytics → iceberg_maintenance ─┤
+                                                                                      ↓
+                                                                         gold_freshness_check
 ```
 
-- `spark_analytics` chạy **song song** với `dbt_build_gold` (dbt nhẹ), nhưng `iceberg_maintenance` chỉ chạy sau `spark_analytics`.
-- Lịch: `0 * * * *` (mỗi giờ), `catchup=False`, `max_active_runs=1`.
+- `dbt_build_gold` chạy **song song** với `spark_analytics` (dbt nhẹ); `iceberg_maintenance` chỉ chạy sau `spark_analytics`.
+- `gold_freshness_check` là task cuối, chạy sau khi **cả** `dbt_build_gold` và `iceberg_maintenance` xong.
+- Lịch: `0 * * * *` (mỗi giờ), `catchup=False`, `max_active_runs=1`, `execution_timeout=45 phút` mỗi task.
 - DAG mặc định **paused** sau khi cài. Khi demo, nên trigger xong rồi tạm dừng lại để lượt chạy theo giờ không chen vào.
 
-Xem tiến trình ở tab **Graph**/**Gantt**; log Spark hiện thẳng trên Airflow vì task Spark chạy client mode.
+Xem tiến trình ở tab **Graph**/**Gantt**; log Spark hiện thẳng trên Airflow vì task Spark chạy client mode. DAG có 6 task; nếu UI vẫn hiện 5 task thì ConfigMap DAG chưa được nạp lại sau khi cập nhật `airflow/dags/joblens_pipeline.py` (`bash deploy/airflow/install.sh`).
 
 ### 8.3. Chạy thủ công từng job
 
 ```bash
-# Silver từ bronze
+# Silver từ bronze. Dùng --full khi đổi normalize.py hoặc cần xử lý lại mọi offset.
 bash deploy/spark/submit.sh silver_job_postings
+# bash deploy/spark/submit.sh silver_job_postings --full
 
-# Kiểm tra chất lượng bằng Great Expectations (fail sẽ trả exit code 1)
+# Kiểm tra chất lượng bằng Great Expectations (16 kỳ vọng; fail sẽ trả exit code 1)
+# Freshness tính bằng now - max(updated_ts): warn 90 phút, error 180 phút.
 bash deploy/spark/submit.sh gx_silver
+
+# Kiểm tra độ tươi source silver rồi build gold
+JOBLENS_PROFILE=full bash scripts/dbt.sh source freshness
+JOBLENS_PROFILE=full bash scripts/dbt.sh build
 
 # Phân tích Spark + MLlib (ghi MongoDB analytics_*)
 bash deploy/spark/submit.sh analytics_spark
@@ -464,9 +495,11 @@ bash deploy/spark/submit.sh analytics_spark
 # Bảo trì Iceberg (rewrite data files, manifests, expire snapshots)
 bash deploy/spark/submit.sh maintenance_iceberg
 
-# dbt build
-bash scripts/dbt.sh build
+# Kiểm tra độ tươi gold từ metadata Iceberg (.history / .snapshots)
+bash deploy/spark/submit.sh gold_freshness_check
 ```
+
+> Chạy tuần tự từng lệnh. `submit.sh` có `set -euo pipefail` và không nuốt exit code của `spark-submit`, nên lệnh tiếp theo chỉ nên chạy khi lệnh trước trả `0`.
 
 Tùy chọn bộ nhớ (máy yếu):
 
@@ -619,10 +652,10 @@ uv run pytest -q
 uv run pytest tests/test_normalize.py -v
 uv run pytest tests/test_noise.py -v
 
-pre-commit run --all-files
+uv run pre-commit run --all-files
 ```
 
-Kết quả mong đợi: `passed`, pre-commit không sửa file nào. Test Spark cần Java 17 và có thể mất vài phút.
+Kết quả mong đợi hiện tại: `247 passed, 1 skipped`, pre-commit không sửa file nào. Test Spark cần Java 17 và có thể mất vài phút.
 
 ### 11.4. Dữ liệu qua Trino
 
@@ -642,7 +675,7 @@ bash scripts/trino.sh -f scripts/check-locations.sql
 
 ### 11.5. GX results
 
-Kết quả Great Expectations lưu trên S3 tại `s3://joblens/quality/gx/silver_job_postings/`, xem qua SeaweedFS UI. Nếu GX fail, task trả exit code 1 và dbt không chạy (gold giữ bản cũ) – đây là hành vi đúng.
+Kết quả Great Expectations lưu trên S3 tại `s3://joblens/quality/gx/silver_job_postings/`, xem qua SeaweedFS UI. Lần chốt 2026-11-25 đạt `16/16` (15 kỳ vọng cũ + 1 freshness trên `updated_ts`, 0,9 phút). Nếu GX fail, task trả exit code 1 và dbt không chạy (gold giữ bản cũ) – đây là hành vi đúng. Không dùng `last_seen_ts` để chấm độ tươi pipeline vì replay/backfill mang event time cũ.
 
 ---
 
@@ -824,8 +857,9 @@ Các số liệu quan trọng:
 - Kết quả Spark analytics + MLlib (`benchmarks/spark_analytics.md`).
 - Kết quả tối ưu join (`benchmarks/join_optimization.md`).
 - Độ bền nhiễu (`benchmarks/noise_robustness.md`).
-- Kết quả GX (15/15 pass/fail).
-- Thời gian chạy DAG.
+- Kết quả GX (16/16 pass/fail) và giá trị `now - max(updated_ts)`.
+- Kết quả `dbt source freshness` và `gold_freshness_check` (tuổi gold, warn 90 / error 180 phút).
+- Thời gian chạy DAG 6 task.
 - Số file Iceberg trước/sau maintenance.
 - Hiệu năng streaming (watermark drops).
 
@@ -929,10 +963,11 @@ Chờ các pod `Running`, job `Completed`, rồi mở http://localhost:8082 và 
 - [ ] `kubectl get pods -A | grep -v -E "Running|Completed"` chỉ còn dòng tiêu đề.
 - [ ] `bash deploy/smoke-e2e.sh` có dòng `source = synthetic`.
 - [ ] `bash scripts/trino.sh "SELECT count(*) FROM iceberg.silver.job_postings"` > 0.
-- [ ] `bash scripts/dbt.sh build` pass toàn bộ test.
-- [ ] `bash deploy/spark/submit.sh gx_silver` exit code 0.
-- [ ] Airflow UI mở được, `joblens_pipeline` chạy xanh 5 task.
-- [ ] `uv run pytest -q` pass; `pre-commit run --all-files` không đổi file.
+- [ ] `bash deploy/spark/submit.sh gx_silver` exit code 0 và log có `→ 16/16 kỳ vọng đạt`.
+- [ ] `JOBLENS_PROFILE=full bash scripts/dbt.sh source freshness` PASS; `bash scripts/dbt.sh build` PASS=15 ERROR=0.
+- [ ] `bash deploy/spark/submit.sh gold_freshness_check` exit code 0, tuổi gold dưới ngưỡng error 180 phút.
+- [ ] Airflow UI mở được, `joblens_pipeline` chạy xanh 6 task.
+- [ ] `uv run pytest -q` pass (`247 passed, 1 skipped`); `uv run pre-commit run --all-files` không đổi file.
 - [ ] Đã ghi một dòng vào `deploy/compat.md` với số đo thật.
 
 ---

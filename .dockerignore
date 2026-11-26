@@ -1,4 +1,5 @@
 # Context build image spark-jobs chỉ cần mã job và bảng địa điểm (xem spark-jobs/Dockerfile)
 *
 !spark-jobs/*.py
+!spark-jobs/exchange_rates.csv
 !dbt/seeds/locations_2025.csv

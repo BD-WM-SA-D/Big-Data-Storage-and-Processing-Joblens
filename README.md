@@ -30,12 +30,23 @@ dùng profile mặc định; máy 8 GB đặt `JOBLENS_PROFILE=lite`; không có
 ```bash
 uv sync                              # môi trường Python (pyspark, dbt-trino, GX, kiểm thử)
 cp .env.example .env
+export JOBLENS_PROFILE=full          # khuyến nghị; lite chỉ cho máy 8 GB, dbt dễ OOMKilled
 bash scripts/bootstrap-all.sh        # dựng cụm + Kafka, S3, Iceberg, MongoDB, Trino, nạp VietJobs, silver, gold,
-                                     # Grafana, Airflow (~30–40 phút lần đầu; chạy lại an toàn)
+                                      # Grafana, Airflow (~40–60 phút lần đầu; chạy lại an toàn)
+bash deploy/smoke-e2e.sh             # kiểm tra toàn tuyến Kafka → Spark → Iceberg → Trino
+bash deploy/spark/submit.sh silver_job_postings   # bronze → silver; bắt buộc trước GX/freshness
+bash deploy/spark/submit.sh gx_silver
+JOBLENS_PROFILE=full bash scripts/dbt.sh source freshness
+JOBLENS_PROFILE=full bash scripts/dbt.sh build
+bash deploy/spark/submit.sh gold_freshness_check
+uv run pytest -q
+uv run pre-commit run --all-files
 bash scripts/demo-ui.sh              # mở Grafana :3000, Kafka UI :8081, Airflow :8082, Trino :8080 …
 bash scripts/trino.sh -f scripts/demo-queries.sql   # kiểm tra dữ liệu bronze/silver/gold
-uv run pytest -q                     # kiểm thử (Spark local)
 ```
+
+Hướng dẫn đầy đủ từ cài công cụ đến chốt số liệu: [`HUONG_DAN_CHAY_CHI_TIET.md`](HUONG_DAN_CHAY_CHI_TIET.md). DAG `joblens_pipeline` có 6 task, task cuối `gold_freshness_check`; freshness dùng `updated_ts` (warn 90 / error 180 phút), không dùng `last_seen_ts`.
+
 
 Không cần crawler: dữ liệu vào từ VietJobs (`deploy/data/`) và fixtures của repo `joblens`. Kiến trúc và mô tả dữ
 liệu: [`docs/kien-truc.md`](docs/kien-truc.md). Kịch bản demo: [`docs/demo.md`](docs/demo.md); tập dượt từng bước: [`docs/tap-duot-demo.md`](docs/tap-duot-demo.md); trong buổi demo: [`docs/chay-demo.md`](docs/chay-demo.md).
@@ -47,9 +58,10 @@ deploy/            Helm values, manifest K8s, cấu hình k3d – nơi DUY NHẤ
 deploy/compat.md   bảng phiên bản platform × mining × app × contracts của mỗi lần chạy
 deploy/monitoring/dashboards/   dashboard Grafana export JSON
 spark-jobs/        streaming bronze, nạp VietJobs, silver, streaming có state → MongoDB, phân tích + MLlib,
-                   kiểm tra GX (gx_silver.py), bảo trì Iceberg
-dbt/               gold marts + dbt tests
-airflow/dags/      DAG điều phối joblens_pipeline (fail-on-error)
+                    kiểm tra GX (gx_silver.py), bảo trì Iceberg, kiểm độ tươi gold (gold_freshness_check.py)
+dbt/               gold marts + dbt tests + source freshness
+airflow/dags/      DAG điều phối joblens_pipeline (6 task, fail-on-error)
+
 scripts/           bootstrap, giao diện demo, thao tác dữ liệu demo, Trino, dbt, thí nghiệm batch vs streaming
 benchmarks/        bảng số liệu cuối (batch vs streaming, Spark analytics)
 tests/             pytest (Spark local, DAG Airflow)
@@ -60,6 +72,7 @@ gx/, event-generator/   chưa dùng (GX chạy trong spark-jobs/gx_silver.py; ev
 
 ## Tài liệu
 
+- Hướng dẫn chạy từ đầu đến cuối: [`HUONG_DAN_CHAY_CHI_TIET.md`](HUONG_DAN_CHAY_CHI_TIET.md)
 - Báo cáo môn: [`docs/`](docs/)
 - Quyết định kiến trúc: [`docs/adr/`](docs/adr/)
 - Yêu cầu môn học và việc còn lại: [`docs/yeu-cau-mon-hoc.md`](docs/yeu-cau-mon-hoc.md)
