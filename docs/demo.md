@@ -66,12 +66,12 @@ chạy xong rồi mới tắt scheduler). Xem RAM: `bash scripts/demo-mode.sh st
 ## 2. Chuẩn bị (trước buổi demo ít nhất 1 ngày)
 
 1. Dữ liệu đã có trong bronze/silver/gold: `bash scripts/trino.sh -f scripts/demo-queries.sql`.
-2. Chạy DAG một lần (Airflow → `joblens_pipeline` → **Trigger**), cả 5 task xanh. Tab *Gantt*: ghi thời gian từng task.
+2. Chạy DAG một lần (Airflow → `joblens_pipeline` → **Trigger**), cả 6 task xanh (kể cả `gold_freshness_check`). Tab *Gantt*: ghi thời gian từng task.
    Sau lần này MongoDB có `analytics_*`, SeaweedFS có `reports/spark-plans/`.
 3. Chạy thử phần streaming (mục 3.1) một lần để MongoDB có `province_windows`.
 4. Mở Grafana, kiểm tra mọi ô có số. Ô nào báo lỗi → mục 5.
 5. Tập một lượt mục 3, **quay màn hình** làm phương án dự phòng.
-6. Slide số liệu: `benchmarks/batch_vs_streaming.md` (độ trễ, số file, RAM) và bảng GX 15/15.
+6. Slide số liệu: `benchmarks/batch_vs_streaming.md` (độ trễ, số file, RAM) và bảng GX 16/16 (15 kỳ vọng + 1 độ tươi).
 
 ## 3. Kịch bản trình bày
 
@@ -85,8 +85,8 @@ Trước giờ demo 15 phút:
 |---|---|---|---|
 | 0–2 | Bài toán + kiến trúc | Slide bài toán (tin tuyển dụng VN, quy mô, giới hạn); sơ đồ luồng; `k9s` `:ns` – `ingest`, `lakehouse`, `compute`, `serving` (Trino, MongoDB), `orchestration`, `monitoring` | Định nghĩa bài toán; kiến trúc; triển khai **Kubernetes** |
 | 2–4 | Lưu trữ + batch | Grafana: *Dòng trong bronze*, *Tin trong silver*. SeaweedFS: `warehouse/…/jobs_raw/data/` theo phân vùng, `metadata/*.metadata.json` | **Lưu trữ phân tán** (S3 thay HDFS) + Iceberg; partition `days(ingest_ts), source` |
-| 4–9 | Streaming – mục 3.1 | Hai job streaming + replay có tin trễ. Kafka UI: message tăng. Spark UI: *Structured Streaming*. Grafana: cột bronze mọc mỗi 10 giây; ô *Tin mới theo tỉnh – cửa sổ 5 phút* (MongoDB) tăng. Log job cửa sổ: "bỏ do trễ (watermark) N" | **Kafka**; **Structured Streaming**: output mode update, **watermark** + dữ liệu trễ, **state**, **exactly-once** (checkpoint + upsert idempotent); **NoSQL** làm serving |
-| 9–13 | Điều phối + chất lượng + Spark nâng cao – mục 3.2 | `demo-mode.sh airflow` → Trigger DAG. Log `gx_validate_silver`: bảng 15 kỳ vọng. Log `spark_analytics`: "kế hoạch thực thi – broadcast_join: ĐÚNG…", chỉ số mô hình. SeaweedFS: `reports/spark-plans/…/broadcast_join.txt` (BroadcastHashJoin), `sort_merge_join.txt` | Pipeline end-to-end; chất lượng dữ liệu; **Spark**: pivot, hàm tổng hợp tùy biến, broadcast vs sort-merge join, partition pruning, cache, phân tích plan, **MLlib** |
+| 4–9 | Streaming – mục 3.1 | Hai job streaming + replay có tin trễ. Kafka UI: message tăng. Spark UI: *Structured Streaming*. Grafana: cột bronze mọc mỗi 10 giây; ô *Tin mới theo tỉnh – cửa sổ 5 phút* (MongoDB) tăng. Log job cửa sổ: "bỏ do trễ (watermark) N" | **Kafka**; **Structured Streaming**: output mode update, **watermark** + dữ liệu trễ, **state**; checkpoint lưu offset/state, bronze MERGE theo khóa Kafka `(topic, partition, offset)` và ghi `bronze.kafka_offset_audit` đo gap, cửa sổ tỉnh upsert theo khóa; **NoSQL** làm serving |
+| 9–13 | Điều phối + chất lượng + Spark nâng cao – mục 3.2 | `demo-mode.sh airflow` → Trigger DAG. Log `gx_validate_silver`: bảng 16 kết quả (15 kỳ vọng GX + 1 độ tươi). Log `spark_analytics`: "kế hoạch thực thi – broadcast_join: ĐÚNG…", chỉ số mô hình. SeaweedFS: `reports/spark-plans/…/broadcast_join.txt` (BroadcastHashJoin), `sort_merge_join.txt` | Pipeline end-to-end; chất lượng dữ liệu; **Spark**: pivot, hàm tổng hợp tùy biến, broadcast vs sort-merge join, partition pruning, cache, phân tích plan, **MLlib** |
 | 13–15 | Kết quả | Grafana: silver không đổi dù bronze tăng (MERGE theo job_uid); biểu đồ gold; phần MongoDB: trung vị vs trung bình cắt 10%, pivot vùng × cấp bậc, bảng mô hình (RMSE so với đoán trung vị) | Trực quan hóa; truy vấn liên nguồn Trino (Iceberg × MongoDB) |
 | 15–18 | Lambda hay Kappa + bài học | Slide số đo `benchmarks/batch_vs_streaming.md`; Grafana: snapshot Iceberg, time travel (mục 3.3); 2–3 bài học tiêu biểu từ `docs/report/bai-hoc-kinh-nghiem.md` | **Lambda/Kappa** có số đo; bài học kinh nghiệm |
 

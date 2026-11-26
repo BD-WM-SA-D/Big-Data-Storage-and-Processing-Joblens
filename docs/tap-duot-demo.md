@@ -60,7 +60,7 @@ Codespaces ([`cloud-codespaces.md`](cloud-codespaces.md)).
    ```bash
    uv run pytest -q
    ```
-   ✅ Dòng cuối dạng `161 passed, 1 skipped` – quan trọng là **không có `failed`**.
+   ✅ Dòng cuối dạng `247 passed, 1 skipped` – quan trọng là **không có `failed`**.
 
 ## 2. Mở giao diện (🟦 T1 – để nguyên suốt buổi)
 
@@ -318,8 +318,9 @@ Kafka không sửa được trên trình duyệt: Kafka UI để chế độ ch�
    ✅ Dòng cuối `==> Đã bỏ tạm dừng DAG joblens_pipeline` và `Giờ mở Airflow → joblens_pipeline → Trigger`.
    T2 và T3 tự dừng (hoặc Ctrl+C) – **đóng T2, T3** được.
 2. Trình duyệt Airflow (http://localhost:8082, user `admin`) → `joblens_pipeline` → **Trigger** → *Trigger* (để mặc định).
-   ✅ Sau ~5–10 phút cả **5 ô task xanh**: `silver_job_postings` → `gx_validate_silver` → `dbt_build_gold`,
-   `spark_analytics` → `iceberg_maintenance`. Bấm `gx_validate_silver` → *Logs*: `→ 15/15 kỳ vọng đạt`.
+   ✅ Sau ~5–10 phút cả **6 ô task xanh**: `silver_job_postings` → `gx_validate_silver` → `dbt_build_gold`,
+   `spark_analytics` → `iceberg_maintenance` → `gold_freshness_check`. Bấm `gx_validate_silver` → *Logs*:
+   `→ 16/16 kỳ vọng đạt` (15 GX + 1 độ tươi).
    Log không mở được (scheduler bận): đợi task xong, hoặc
    `kubectl logs -n compute $(kubectl get pods -n compute -o name | grep gx-silver | tail -1) | grep "kỳ vọng"`.
 3. Grafana: bảng *Lần chạy spark_analytics* có dòng mới. Ghi lại ô *Số file dữ liệu* trước và sau DAG – đây là số đo

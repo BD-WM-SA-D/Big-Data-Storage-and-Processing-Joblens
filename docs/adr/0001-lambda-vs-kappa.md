@@ -42,6 +42,11 @@ Hai kiến trúc kinh điển:
 | Độ phức tạp vận hành | cao: hai mã, ghép kết quả | trung bình: mọi biến đổi là streaming, khó với MERGE/GX/dbt | thấp–trung bình: một mã nạp, dbt/GX chạy batch quen thuộc |
 | Tái xử lý | chạy lại batch | replay Kafka (giới hạn bởi retention) | replay Kafka hoặc `--full` trên bronze + time travel |
 
+Ghi chú (2026-11-25, P0.3/P0.5): DAG có `execution_timeout` 45 phút (giá trị khởi đầu, hiệu chỉnh qua env) và
+task cuối `gold_freshness_check` đọc thời điểm làm mới gold từ metadata Iceberg. Ngưỡng warn 90 / error 180 phút
+dùng chung cho silver (GX, dbt source freshness) và gold là **ngưỡng chính sách**, không phải số đo. Vì chưa chạy
+diễn tập/chốt số liệu nên ô độ tươi gold ở trên vẫn giữ `<số đo>`; trạng thái ADR vẫn là Đề xuất.
+
 ## Quyết định (đề xuất)
 
 Chọn **C – Kappa cho đường nạp, batch theo lịch cho silver/gold**, với điều kiện số đo trong

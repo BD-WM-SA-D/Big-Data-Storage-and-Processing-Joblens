@@ -41,7 +41,7 @@ flowchart LR
   K -- "Spark Structured Streaming<br/>bronze_jobs" --> B
   K -- "Spark streaming có state<br/>stream_province_windows" --> M
   B -- "Spark MERGE INTO + chuẩn hóa<br/>silver_job_postings" --> S
-  S -- "GX 15 kỳ vọng (cổng)" --> S
+  S -- "GX 15 kỳ vọng + freshness (cổng)" --> S
   S -- "dbt-trino" --> G
   S -- "Spark analytics + MLlib<br/>analytics_spark" --> M
   B & S & G --> T
@@ -105,7 +105,8 @@ Schema message `job_posting.v1` và contract các bảng nằm ở repo `joblens
 | NoSQL | `mongodb.joblens.analytics_*` | kết quả Spark: lương theo tỉnh (trung vị, trung bình cắt 10%), pivot vùng × cấp bậc, lượng nạp theo giờ, lần chạy + RMSE mô hình | ghi đè mỗi lần chạy | `analytics_spark.py` |
 
 Chất lượng: GX 15 kỳ vọng trên silver (không trùng `job_uid`, mã trong danh mục, lương hợp lệ, ≥ 90% có địa điểm,
-≥ 50% có lương) – kết quả ghi `s3://joblens/quality/gx/`; dbt test trên gold.
+≥ 50% có lương) + 1 kiểm tra độ tươi `now - max(updated_ts)` theo ngưỡng chính sách 90/180 phút – kết quả ghi
+`s3://joblens/quality/gx/`; dbt source freshness và dbt test trên gold.
 
 ### 4.3. Số liệu hiện có (lần chạy 2026-10-23/24, `deploy/compat.md`)
 
@@ -114,7 +115,7 @@ Chất lượng: GX 15 kỳ vọng trên silver (không trùng `job_uid`, mã tr
 | Tin trong silver | 48,1K (48.092 VietJobs + tin synthetic) |
 | Dòng trong bronze | 74,1K – gồm bản trùng từ các lần replay/thí nghiệm; silver khử về một dòng mỗi tin |
 | Tỉ lệ có địa điểm / có lương (silver) | 98,5% / 71,5% |
-| GX | 15/15 kỳ vọng đạt |
+| GX | 15/15 kỳ vọng đạt (số cũ 2026-10-23/24); chốt 2026-11-25: 16/16, freshness `updated_ts` 0,9 phút |
 | Mô hình lương (MLlib, CrossValidator) | RMSE 10,32 triệu VND so với 11,20 của mô hình đoán trung vị |
 
 ## 5. Thao tác dữ liệu trực tiếp

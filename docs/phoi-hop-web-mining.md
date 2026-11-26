@@ -50,7 +50,7 @@ dòng thì sửa cột trạng thái và báo nhóm chat.
 | Bước | WM | BD | Xong khi |
 |---|---|---|---|
 | 0 | Duyệt ADR 0001 (cả nhóm) – `joblens` gắn tag contract đầu tiên | | ADR "Đã chấp nhận", có tag `v1.x` |
-| 1 | `crawler/producer.py` gửi `jsonl` đã crawl (đã kiểm schema bằng `schema_errors`) vào `jobs.raw.topcv.v1`, lỗi vào `dlq.parse_errors.v1` | chạy `bronze_jobs`, kiểm `source = 'topcv'` vào bronze → silver; bổ sung alias tỉnh nếu tỉ lệ có địa điểm < 90% | Grafana thấy nguồn `topcv`; GX 15/15 đạt với dữ liệu TopCV |
+| 1 | `crawler/producer.py` gửi `jsonl` đã crawl (đã kiểm schema bằng `schema_errors`) vào `jobs.raw.topcv.v1`, lỗi vào `dlq.parse_errors.v1` | chạy `bronze_jobs`, kiểm `source = 'topcv'` vào bronze → silver; bổ sung alias tỉnh nếu tỉ lệ có địa điểm < 90% | Grafana thấy nguồn `topcv`; GX 16/16 đạt với dữ liệu TopCV |
 | 2 | image **stub** `skill-extractor` (trả từ điển) theo hợp đồng chạy D3 | task Airflow `skills` sau `gx_validate_silver`; dbt `dim_skill`, `mart_skill_demand_monthly` | DAG xanh với stub |
 | 3 | image thật `skill-extractor` + dòng trong `models.yaml` | đổi tag trong values Airflow, ghi `deploy/compat.md` | DAG xanh với image thật |
 | 4 | image `job-dedup` (+ stub) | task Airflow `dedup`; gold đếm theo `dup_group_id` | số tin gold = số nhóm trùng |

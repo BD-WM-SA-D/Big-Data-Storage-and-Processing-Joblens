@@ -59,7 +59,7 @@ bash scripts/demo-ui.sh
    kubectl get secret airflow-admin -n orchestration -o jsonpath='{.data.password}' | base64 -d; echo
    ```
 2. Mở http://localhost:8082 → đăng nhập `admin` → bấm `joblens_pipeline` → nút **Trigger** (▶) → **Trigger**.
-3. Đợi ~5–10 phút (làm A4, A5 trong lúc đợi). ✅ 5 ô task xanh.
+3. Đợi ~5–10 phút (làm A4, A5 trong lúc đợi). ✅ 6 ô task xanh (kể cả `gold_freshness_check`).
 4. Khi đã xanh: bấm **công tắc Pause** (cạnh tên DAG) để DAG **tạm dừng** – tránh lượt chạy theo giờ chen vào giữa
    buổi demo. ✅ Công tắc chuyển sang trạng thái tạm dừng.
 
@@ -139,7 +139,7 @@ Có sẵn video quay một lượt đầy đủ trên máy (phòng khi mất m�
    `silver_job_postings → gx_validate_silver → {dbt_build_gold, spark_analytics → iceberg_maintenance}`.
    Nói: *"Mỗi task là một pod Kubernetes. GX hỏng thì gold không được xây lại – cổng chất lượng."*
 2. Bấm ô **gx_validate_silver** của lượt vừa chạy (phần A3) → **Logs** → cuộn tới bảng kết quả.
-   ✅ Dòng cuối `→ 15/15 kỳ vọng đạt`. Chỉ 2–3 dòng: `job_uid` không trùng, lương trong khoảng hợp lệ, tỉ lệ có địa
+   ✅ Dòng cuối `→ 16/16 kỳ vọng đạt` (15 kỳ vọng GX + 1 độ tươi). Chỉ 2–3 dòng: `job_uid` không trùng, lương trong khoảng hợp lệ, tỉ lệ có địa
    điểm ≥ 90%.
    Log không mở được: **T2** `kubectl logs -n compute $(kubectl get pods -n compute -o name | grep gx-silver | tail -1) | grep -A20 "Kết quả GX"`.
 3. Tab **Gantt**: đọc thời gian từng task của lượt này.
@@ -160,8 +160,9 @@ Có sẵn video quay một lượt đầy đủ trên máy (phòng khi mất m�
    ```bash
    DRIVER_MEMORY=768m EXECUTOR_MEMORY=768m bash deploy/spark/submit.sh bronze_jobs --trigger "10 seconds"
    ```
-   Trong 1–2 phút chờ hai job khởi động: nói về exactly-once – *"offset Kafka và state lưu trong checkpoint; MongoDB
-   upsert theo khóa cửa sổ × tỉnh nên chạy lại một micro-batch vẫn cho cùng kết quả."*
+   Trong 1–2 phút chờ hai job khởi động: nói về phục hồi có kiểm soát – *"checkpoint lưu offset Kafka và state;
+   bronze ghi bằng MERGE theo khóa `(kafka_topic, kafka_partition, kafka_offset)` và mỗi batch ghi
+   `bronze.kafka_offset_audit` để so end offset với offset lớn nhất đã nạp; MongoDB upsert theo khóa cửa sổ × tỉnh."*
    ✅ T2 và T3 đều lặp lại `Streaming query has been idle and waiting for new data`.
 4. **T4** (tab mới, `cd` vào repo) – **chỉ khi T2 và T3 đã `idle`**:
    ```bash
@@ -244,7 +245,7 @@ chuỗi '15 - 25 triệu' thành số VND và 'Đà Nẵng' thành mã tỉnh 48
 
 (Kế hoạch thực thi đầy đủ: Tab 3 SeaweedFS → `reports/spark-plans/` → mở `broadcast_join.txt`.)
 
-Kết: *"Repo có mã chạy được (README – Chạy nhanh, 179 kiểm thử), dữ liệu thật trên lakehouse, kiến trúc và quyết định
+Kết: *"Repo có mã chạy được (README – Chạy nhanh, 247 kiểm thử + 1 skipped), dữ liệu thật trên lakehouse, kiến trúc và quyết định
 ghi trong docs/. Việc tiếp: đo lại batch vs streaming, đo compaction, ghép crawler và dedup của nhóm Web Mining."*
 
 ## 7. Hỏi đáp – trả lời nhanh
@@ -255,10 +256,10 @@ ghi trong docs/. Việc tiếp: đo lại batch vs streaming, đo compaction, gh
 | Vì sao Kappa, không Lambda? | Một mã nạp cho dữ liệu sống và lịch sử; silver/gold cần MERGE + dbt + GX nên chạy batch; số đo p95 streaming ~60 s vs batch ~122 s, hai đường cho cùng tập khóa – `docs/adr/0001-lambda-vs-kappa.md`, `benchmarks/batch_vs_streaming.md` |
 | Vì sao không dùng HDFS? | S3 API (SeaweedFS) là chuẩn lưu trữ đối tượng phổ biến, nhẹ cho cụm một máy; Iceberg chạy trên S3 nên có ACID, snapshot, schema evolution mà HDFS thuần không có |
 | Dữ liệu đến trễ? | Event time `crawl_ts` + watermark 10 phút (phần 4, bước 7) |
-| Exactly-once? | Checkpoint (offset Kafka + state) + commit Iceberg; MongoDB upsert idempotent theo `_id` cửa sổ × tỉnh |
+| Chạy lại có trùng không? | Checkpoint giữ offset/state; bronze MERGE theo khóa Kafka `(topic, partition, offset)` và ghi `bronze.kafka_offset_audit`; MongoDB upsert theo `_id` cửa sổ × tỉnh. Không khẳng định exactly-once khi chưa drill replay trên cụm |
 | Dữ liệu lớn cỡ nào? | 48.092 tin VietJobs (~75K dòng bronze kể cả replay); thiết kế phân vùng/bucket để mở rộng – partition `days(ingest_ts), source`, `bucket(16, job_uid)` |
 | Chạy lại từ đầu được không? | `bash scripts/bootstrap-all.sh` trên máy trống (~30–40 phút) hoặc GitHub Codespaces |
-| Chất lượng dữ liệu? | GX 15 kỳ vọng làm cổng trước gold; dbt 12 test trên gold |
+| Chất lượng dữ liệu? | GX 15 kỳ vọng + 1 kiểm tra độ tươi làm cổng trước gold; dbt source freshness và 12 test trên gold |
 
 ## B. Sau buổi demo
 

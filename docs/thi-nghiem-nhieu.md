@@ -296,3 +296,19 @@ một đầu vượt ngưỡng thì bỏ cả khoảng (kiểm thử `test_salar
 | Message hỏng | mất im lặng | 100% vào cách ly kèm lý do |
 
 Giới hạn còn lại và lý do: xem mục "Đọc kết quả" trong file benchmark.
+
+## Quy tắc mới sau thí nghiệm: golden set và tỷ giá theo ngày đăng
+
+Golden set (P1.6) là 5 ca hồi quy nằm trong `tests/test_normalize.py`, gom các chuỗi từng gây tranh cãi ở phần 3:
+`hải châu` và `văn giang` cố ý giữ null (tên quận/huyện thật, không đoán sang tỉnh khác), `0.0 triệu` cố ý coi là
+thỏa thuận, `200 - 500 triệu` cố ý loại cả khoảng vì vượt ngưỡng 300 triệu/tháng, `ho chi minh city` sửa đúng thành
+mã 79 nhờ bỏ hậu tố `City`. Đây là kỳ vọng hành vi, **không phải số đo**; số liệu ở phần 1–3 giữ nguyên. Mọi sửa đổi
+`normalize.py` sau này phải chạy lại golden set này.
+
+Tỷ giá USD theo ngày đăng (P1.5) đọc từ `spark-jobs/exchange_rates.csv` (cột `date,usd_vnd,source`). Các dòng là
+**fixture do nhóm đặt mẫu để kiểm thử**, có nguồn ghi là `fixture-joblens-khong-crawl`: không crawl, không phải tỷ giá
+ngân hàng và không phải kết quả thí nghiệm. Bốn mốc 2026-09-01, 2026-09-15, 2026-10-01, 2026-11-01 chỉ là ví dụ để
+kiểm tra quy tắc lấy tỷ giá gần nhất không muộn hơn `date_posted`; ví dụ tin đăng 2026-09-20 dùng tỷ giá mẫu 25.400
+cho ra khoảng lương 25,4–50,8 triệu VND. Thiếu `date_posted` hoặc không có tỷ giá nào phù hợp thì pipeline dùng
+`JOBLENS_USD_VND`/`DEFAULT_USD_VND` và ghi cảnh báo qua `logging`. Chưa chạy replay hay đối chiếu GX cho quy tắc này,
+nên chưa có số liệu mới để ghi vào bảng trên; nếu đổi tỷ giá lịch sử thì replay lát liên quan trước khi publish.
