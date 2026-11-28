@@ -89,17 +89,29 @@ Chế độ lô (bỏ `--stream`) gửi mọi file một lần – dùng khi ch�
 
 ## 6. Kết quả
 
-`<cần đo>` – điền sau khi chạy (ngày, commit BD, `WM_REF`, bản image stub/full), thêm một dòng `deploy/compat.md`.
+### Lần 1 – 2026-11-28, image stub
+
+BD `1fe3a9e`, WM `17b4730`, image mô hình **stub**, dữ liệu nhận 28/11 (mục 2). Đối soát lúc 22:51 (sau lần gửi
+đầu) và 23:05 (sau lần gửi lại), giờ Việt Nam. Dòng tương ứng trong `deploy/compat.md`.
 
 | # | Kết quả | Đạt? |
 |---|---|---|
-| F1 | `<cần đo>` | |
-| F2 | `<cần đo>` | |
-| F3 | `<cần đo>` | |
-| F4 | `<cần đo>` | |
-| F5 | `<cần đo>` | |
-| F6 | `<cần đo>` | |
-| F7 | `<cần đo>` | |
+| F1 | Kafka ↔ bronze khớp từng message: topcv 352, itviec 561, review 144. Có 0 dòng cách ly, 0 message `dlq.parse_errors.v1`. Topic `jobs.raw.topcv.v1` có thêm 6 message `synthetic` từ smoke test 17/10, vẫn có trong bronze. Tính cả 6 message này thì 358 = 352 + 6 | Đạt |
+| F2 | Gửi lại toàn bộ file: bronze tăng đúng số message (itviec 561 → 1.122, topcv 352 → 704, review 144 → 288), Kafka cũng vậy (710 = 704 + 6). Silver, lịch sử, bảng WM và gold có số đếm **giống hệt** lần đầu. Silver chạy lại lúc 22:58–22:59, giữa hai lần đối soát. F2 cho bảng WM cần thêm một lượt DAG sau lần gửi lại – chưa xác nhận | Đạt (silver, lịch sử) |
+| F3 | GX `<cần xác nhận>`. Độ phủ – topcv: lương 54,3 % + thỏa thuận 45,5 %, địa điểm 99,7 %, cấp bậc 96,6 %, kinh nghiệm 91,2 %, ngày đăng 100 %. itviec: lương 22,9 % (trang ẩn lương với người chưa đăng nhập; BD không đăng nhập vào trang nguồn), địa điểm 73,3 % (sau khi nhận "Quận/Huyện …"; phần còn lại là "Not Available"), cấp bậc 98,1 %, kinh nghiệm 94,6 %, ngày đăng 100 %. So VietJobs: lương 71,4 %, địa điểm 98,5 % | Đạt; lương ITviec thấp do nguồn |
+| F4 | itviec: 561 phiên bản / 536 tin, 24 tin "đổi" – **cả 24 là đổi giả** do id trùng (mục 2, phát hiện 1). `title` và `company_key` cùng đổi 25 lần, các trường khác đổi theo. topcv: 0 tin đổi vì các đợt crawl không có tin chung (phát hiện 2). Tỉ lệ đổi thật trên dữ liệu này là 0, chưa so được với giả định 5 %/lần của `recrawl_sim`. Bất biến SCD2 (dbt test trong DAG): `<cần xác nhận>` | Pipeline đạt; chưa có dữ liệu đổi thật |
+| F5 | Trễ tới khi bronze đủ dòng, gửi cách nhau 30 s, trigger 10 s: `itviec-jobs/2026-11-13` 561 tin – 26 s; `topcv/2026-10-12` 304 tin – 18 s; `topcv/2026-11-15` 27 tin – 16 s; `topcv/2026-11-18` 21 tin – 7 s | Đạt (< 60 s) |
+| F6 | Chạy với **stub**: job_skills 21.360 dòng / 874 tin; job_dedup 5 nhóm > 1 tin (10 tin), 2 nhóm khác trang; review_aspects 1.085 dòng / 144 review. Kết quả stub không so được với báo cáo WM. Chờ image bản thật | Chưa đo |
+| F7 | mart_skill_demand_monthly 5.600 dòng, mart_company_aspect_sentiment 554 dòng, dim_company có review 144 (mỗi công ty một review trong dữ liệu nhận). Top kỹ năng hiện đến từ stub, chưa có ý nghĩa | Đạt (đường dữ liệu) |
+
+**Ghi chú khi đọc kết quả.** `is_active` = 0 với mọi tin crawl. `silver_job_postings` đánh dấu hết hạn khi
+`last_seen_ts` cũ hơn 7 ngày tính theo **giờ chạy**, mà đợt crawl mới nhất là 18/11. Đây là đúng quy tắc khi nạp
+dữ liệu cũ, không phải lỗi. Nếu cần phát lại dữ liệu cũ thì mốc nên là `crawl_ts` lớn nhất của nguồn – để lại làm
+việc sau.
+
+### Lần 2 – image bản thật
+
+`<cần đo>` – khi có image WM bản thật: `install.sh full` → DAG → `report-real-ingest.sh`, điền F6, F7.
 
 ## 7. Rủi ro đã biết
 
