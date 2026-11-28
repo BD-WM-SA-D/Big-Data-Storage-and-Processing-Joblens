@@ -314,11 +314,27 @@ def test_typo_match_only_keyboard_errors():
 
 @pytest.mark.parametrize(
     "place",
-    ["văn giang", "tp phủ lý", "phúc yên", "hải châu", "phổ yên", "long thành"],
+    ["văn giang", "tp phủ lý", "phúc yên", "phổ yên", "long thành"],
 )
 def test_real_district_names_are_not_guessed_as_other_provinces(place):
     # tên huyện/thị xã thật trên VietJobs sạch từng bị so khớp gần đúng nhầm sang tỉnh khác (lab.clean_diffs)
     assert N.location_codes([place]) == []
+
+
+def test_district_names_map_to_their_city_not_a_lookalike_province():
+    # "hải châu" từng bị đoán thành Lai Châu; nay là alias quận của Đà Nẵng
+    assert N.location_codes(["hải châu"]) == ["48"]
+    # ITviec chỉ ghi quận/huyện, có tiền tố "Quận"/"Huyện", không kèm tỉnh (dữ liệu crawl 13/11)
+    assert N.location_codes(["Quận Tân Bình", "Quận Cầu Giấy", "Huyện Gia Lâm"]) == [
+        "79",
+        "01",
+    ]
+    assert N.location_codes(["Quận Ngũ Hành Sơn"]) == ["48"]
+    assert N.location_codes(["Quận 7"]) == ["79"]  # quận số giữ alias riêng của TP.HCM
+    assert N.location_codes(["Quận khác", "Not Available"]) == []
+    assert N.location_codes(["Quảng Nam"]) == [
+        "48"
+    ]  # tỉnh bắt đầu bằng "Quan…" không bị cắt nhầm
 
 
 def test_location_typos_and_city_suffix():

@@ -16,10 +16,38 @@ có di chuyển, lưu, xử lý dữ liệu thật đúng và kịp không.
 | F3 | **Chất lượng chuẩn hóa trên dữ liệu thật** so với VietJobs | % có lương, địa điểm, cấp bậc, kinh nghiệm, ngày đăng (`report-real-ingest.sh` mục 4); GX `gx_silver` | GX 15/15; độ phủ ghi lại, chỗ thấp thì tìm nguyên nhân (ví dụ cách ghi lương riêng của trang) |
 | F4 | **Lịch sử thật:** các đợt crawl có ngày cho thấy tin đổi gì | `silver.job_postings_history`: % tin đổi, trường đổi (mục 5) | bất biến SCD2 đạt (dbt test); so tỉ lệ đổi thật với giả định 5%/lần crawl của `recrawl_sim` |
 | F5 | **Độ trễ khi nạp dạng luồng:** gửi từng đợt crawl theo thứ tự ngày khi `bronze_jobs` streaming (trigger 10 giây) đang chạy | thời gian từ lúc gửi một đợt tới khi bronze có đủ dòng (`ingest-crawl.sh --stream`) | trễ ≤ 2 trigger + thời gian commit (dự kiến < 60 s – `<cần đo>`) |
-| F6 | **Ghép mô hình đúng:** kết quả image WM chạy trong DAG khớp con số WM tự báo cáo | `report-real-ingest.sh` mục 6 – số nhóm tin trùng, số nhóm khác trang | khớp báo cáo tiến độ WM (17 nhóm trùng, 5 nhóm khác trang trên 888 tin) khi cùng dữ liệu, cùng phiên bản image; lệch thì tìm nguyên nhân |
+| F6 | **Ghép mô hình đúng:** image WM chạy trong DAG cho cùng kết quả như WM chạy image đó ngoài cụm | `report-real-ingest.sh` mục 6 – số dòng kỹ năng, số nhóm tin trùng, số câu review | khớp kết quả WM chạy cùng image `17b4730` trên cùng file (WM gửi số đếm). Báo cáo WM đã bỏ phần dedup (23/11) nên không so với con số 17 nhóm cũ |
 | F7 | **Gold có số liệu thật:** mart nhu cầu kỹ năng, đánh giá công ty | mục 7 | các bảng có dòng; top kỹ năng hợp lý; test dbt đạt |
 
-## 2. Chuẩn bị
+## 2. Dữ liệu nhận ngày 28/11 và kiểm tra trước khi nạp
+
+WM gửi `joblens-wm-crawl-2026-11-28.zip` (commit WM `17b4730`), chỉ dùng nội bộ nhóm, xóa khi kết thúc môn; dữ liệu
+ITviec chưa có văn bản đồng ý của ITviec. Hai file image bản thật (`light` ~250 MB, `ml` ~930 MB) gửi riêng.
+
+| File | Message | Khóa khác nhau | Lỗi schema |
+|---|---|---|---|
+| `topcv/2026-10-12/jobs.jsonl` | 304 | 304 | 0 |
+| `topcv/2026-11-15/jobs.jsonl` | 27 | 27 | 0 |
+| `topcv/2026-11-18/jobs.jsonl` | 21 | 21 | 0 |
+| `itviec-jobs/2026-11-13/jobs.jsonl` | 561 | **536** | 0 |
+| `itviec/reparse-2026-11-15/reviews.jsonl` | 144 review | 144 | 0 |
+
+Kiểm tra trên máy (JSON Schema `job_posting.v1`/`review.v1`; chạy chuẩn hóa và `silver_job_history` bằng Spark cục bộ
+trên đúng các file này, không nạp cụm) tìm ra trước ba điều – thí nghiệm trên cụm sẽ xác nhận bằng số đếm:
+
+1. **Id tin ITviec không duy nhất.** 24 `source_job_id` (ví dụ `2706`) trỏ tới hai tin khác hẳn nhau (khác URL, tiêu
+   đề, công ty): crawler lấy số cuối của slug URL làm id. Trên nền tảng: silver ghi đè tin này bằng tin kia (mất 25 tin
+   ITviec), lịch sử sinh **24 "thay đổi" giả** (đổi tiêu đề + công ty). `report-real-ingest.sh` mục 2b phát hiện được.
+   Sửa ở WM: dùng cả slug làm id. Bộ "seen" của spider cũng theo id này nên tin mới có số trùng sẽ bị bỏ qua.
+2. **Ba đợt crawl TopCV không có tin chung** (0 tin xuất hiện ở hai đợt): spider chỉ lấy tin chưa thấy, nên lịch sử
+   tin thật (F4) dự kiến **0 thay đổi**. Muốn đo lịch sử thật thì crawler phải ghé lại tin đã có (crawl lại theo
+   `lastmod`), không chỉ tin mới.
+3. **Địa điểm ITviec chỉ có quận/huyện** ("Quận Tân Bình", "Huyện Gia Lâm") không kèm tỉnh: chuẩn hóa cũ chỉ nhận
+   32,1% tin ITviec. Đã sửa ở repo này (bỏ tiền tố "Quận/Huyện" rồi tra alias quận/huyện; thêm quận/huyện Đà Nẵng vào
+   `dbt/seeds/locations_2025.csv`) → 73,8%; phần còn lại là `Not Available` (152 tin) do nguồn không ghi. TopCV 99,7%.
+   Đổi `normalize.py` nên chạy `silver_job_postings --full` sau khi cập nhật (bài học 21/11).
+
+## 3. Chuẩn bị
 
 | Việc | Ai | Ghi chú |
 |---|---|---|
@@ -28,7 +56,7 @@ có di chuyển, lưu, xử lý dữ liệu thật đúng và kịp không.
 | Image mô hình | BD build `stub`; WM gửi bản thật | `bash deploy/mining/install.sh stub` → thử đường đi; bản thật: `full` (skill-extractor `ml`, job-dedup + absa-scorer `light`) |
 | Mã producer | tự lấy | `scripts/ingest-crawl.sh` clone WM đúng `WM_REF` (`deploy/mining/images.env`) và `uv sync --group kafka` |
 
-## 3. Cách chạy
+## 4. Cách chạy
 
 | # | Terminal | Lệnh | Thành công khi |
 |---|---|---|---|
@@ -46,7 +74,7 @@ có di chuyển, lưu, xử lý dữ liệu thật đúng và kịp không.
 Chế độ lô (bỏ `--stream`) gửi mọi file một lần – dùng khi chỉ cần dữ liệu, không đo trễ; sau đó
 `bronze_jobs --once` nếu streaming không chạy.
 
-## 4. Vì sao thiết kế như vậy
+## 5. Vì sao thiết kế như vậy
 
 - **Đi qua Kafka chứ không nạp thẳng bronze** (khác backfill VietJobs): đây là đường của hệ thống thật (ADR 0001 D1:
   crawler → Kafka). Đo được cả hợp đồng message (schema, DLQ) lẫn exactly-once của bronze streaming.
@@ -59,7 +87,7 @@ Chế độ lô (bỏ `--stream`) gửi mọi file một lần – dùng khi ch�
 - **Chỉ đưa nguồn crawl vào mô hình** (`--sources topcv,itviec`): dữ liệu mô phỏng `synthetic` trùng tiêu đề + công ty
   với tin VietJobs gốc, đưa vào thì job-dedup gộp sai (WM 0.1.1 có tham số này theo đề nghị của BD).
 
-## 5. Kết quả
+## 6. Kết quả
 
 `<cần đo>` – điền sau khi chạy (ngày, commit BD, `WM_REF`, bản image stub/full), thêm một dòng `deploy/compat.md`.
 
@@ -73,7 +101,7 @@ Chế độ lô (bỏ `--stream`) gửi mọi file một lần – dùng khi ch�
 | F6 | `<cần đo>` | |
 | F7 | `<cần đo>` | |
 
-## 6. Rủi ro đã biết
+## 7. Rủi ro đã biết
 
 - `absa-scorer --changed-since` lọc theo `crawl_ts` (thời điểm crawl): review crawl từ trước rồi mới gửi vào Kafka sẽ
   bị bỏ sót nếu chạy tăng dần → DAG **không** truyền tham số này cho absa (xử lý lại toàn bộ, review ít). Đề nghị WM đổi

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Đối soát dữ liệu crawl thật sau khi nạp (thí nghiệm F – docs/thi-nghiem-du-lieu-that.md mục 3):
+# Đối soát dữ liệu crawl thật sau khi nạp (thí nghiệm F – docs/thi-nghiem-du-lieu-that.md mục 1, 6):
 # Kafka (offset) ↔ bronze ↔ bronze.ingest_errors ↔ silver ↔ history ↔ bảng của WM ↔ gold, chỉ nguồn crawl
 # (topcv, itviec). In bảng markdown; chép số vào docs, không commit đầu ra.
 #   bash scripts/report-real-ingest.sh
@@ -29,6 +29,15 @@ UNION ALL
 SELECT 'review:' || source, count(*), count(DISTINCT source_review_id), count(DISTINCT date(crawl_ts)),
        min(crawl_ts), max(crawl_ts)
 FROM iceberg.bronze.reviews_raw WHERE source <> 'synthetic' GROUP BY 1 ORDER BY 1"
+
+q "2b. Một source_job_id mang nhiều cặp tiêu đề + công ty khác nhau (id của crawler không duy nhất → tin bị ghi đè, lịch sử đổi giả)" "
+SELECT source, count(*) AS ids_conflicting, sum(n) AS messages
+FROM (SELECT source, source_job_id, count(DISTINCT title_company) AS n FROM (
+        SELECT source, source_job_id, json_extract_scalar(payload_json, '$.title') || '|' ||
+               coalesce(json_extract_scalar(payload_json, '$.company_name'), '') AS title_company
+        FROM iceberg.bronze.jobs_raw WHERE source IN $CRAWL)
+      GROUP BY 1, 2 HAVING count(DISTINCT title_company) > 1)
+GROUP BY 1"
 
 q "3. Cách ly khi nạp bronze (message hỏng) theo topic và lý do" "
 SELECT kafka_topic, reason, count(*) AS rows FROM iceberg.bronze.ingest_errors

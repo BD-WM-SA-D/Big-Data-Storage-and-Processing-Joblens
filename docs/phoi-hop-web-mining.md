@@ -126,6 +126,13 @@ trước) cho skill-extractor; **không** truyền cho absa-scorer vì mốc c�
 crawl sẽ bị bỏ sót (đề nghị WM đổi sang `ingest_ts`). Bản `light`/`ml` cần `data/` nên WM build và gửi file image.
 Thí nghiệm dữ liệu crawl thật qua Kafka: [`thi-nghiem-du-lieu-that.md`](thi-nghiem-du-lieu-that.md).
 
+**2026-11-25:** DAG chạy xanh đủ 11 task với 3 image stub `17b4730` trong cụm (chưa có dữ liệu crawl).
+**2026-11-28:** WM gửi dữ liệu crawl (TopCV 3 đợt 352 tin, ITviec 561 tin, 144 review) + image `light`/`ml`. Kiểm tra
+trước khi nạp thấy ba việc – chi tiết [`thi-nghiem-du-lieu-that.md`](thi-nghiem-du-lieu-that.md) mục 2: (1) **WM:** id tin
+ITviec không duy nhất (24 id trùng giữa hai tin khác nhau); (2) **WM:** spider không crawl lại tin đã thấy nên các đợt
+TopCV không có tin chung – không đo được lịch sử thật; (3) **BD (đã sửa):** địa điểm ITviec chỉ có quận/huyện → thêm
+bước bỏ tiền tố "Quận/Huyện" và alias quận Đà Nẵng, độ phủ địa điểm ITviec 32,1% → 73,8%.
+
 **Phát hiện khi kiểm thử phía BD – WM cần sửa trước khi bật `stub`:**
 
 1. **Image không ghi được vào bảng có partition.** Nhóm `lakehouse` của WM cài `pyiceberg[s3fs,sql-sqlite]` mà không có

@@ -77,6 +77,12 @@ def fold(text: str | None) -> str:
 
 _PLACE_PREFIX = re.compile(r"^(tinh|thanh pho|tp|t p|tx|thi xa)\s+")
 _PLACE_SUFFIX = re.compile(r"\s+(cu|moi|city|province)$")
+# Cấp quận/huyện đứng trước tên (ITviec ghi "Quận Tân Bình", "Huyện Gia Lâm" mà không kèm tỉnh). Chỉ bỏ khi tên
+# đầy đủ không khớp – "Quận 1" vẫn khớp alias "quận 1" của TP.HCM; phần còn lại phải là alias quận/huyện trong
+# dbt/seeds/locations_2025.csv (chỉ khai báo quận/huyện của Hà Nội, TP.HCM, Đà Nẵng – tên không trùng giữa các tỉnh).
+_DISTRICT_PREFIX = re.compile(
+    r"^(quan|huyen)\s+(?!\d)"
+)  # "quan 1" giữ nguyên – alias riêng
 
 
 def place_key(text: str | None) -> str:
@@ -193,6 +199,12 @@ def location_codes(
         for part in re.split(r"[,;|/]", text or ""):
             key = place_key(part) if robust else _baseline_place_key(part)
             code = index.get(key)
+            if code is None and robust:
+                folded = fold(part).strip()
+                if _DISTRICT_PREFIX.match(folded):
+                    code = index.get(
+                        place_key(_DISTRICT_PREFIX.sub("", folded, count=1))
+                    )
             if code is None and robust:
                 code = fuzzy_location(key, csv_path)
             if code and code not in out:
